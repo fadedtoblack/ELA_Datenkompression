@@ -25,7 +25,7 @@ from decoder    import decode, compute_psnr
 def generate_ela(image_path: str,
                  quality: float = 75.0,
                  multiplier: float = 30.0,
-                 output_dir: str = "output",
+                 output_dir: str = "ELA_tool\output",
                  save_intermediates: bool = False) -> np.ndarray:
     """
     Generate an ELA image for a given input image.
@@ -64,6 +64,8 @@ def generate_ela(image_path: str,
         save_intermediates=save_intermediates,
         output_dir=output_dir,
     )
+
+    print(enc_result)
 
     repro_name = f"{base_name}_reproduced_q{quality:.0f}"
     reproduced_rgb, psnr = decode(enc_result,

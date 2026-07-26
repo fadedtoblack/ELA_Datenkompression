@@ -24,7 +24,7 @@ from encoder    import EncoderResult
 
 
 def decode(enc_result: EncoderResult,
-           output_dir: str = "output",
+           output_dir: str = "ELA_tool\output",
            image_name: str = "reproduced") -> tuple[np.ndarray, float]:
     """
     Run the full decoder pipeline using the output of the encoder.
