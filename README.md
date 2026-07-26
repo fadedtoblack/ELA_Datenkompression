@@ -1,2 +1,2 @@
 # ELA_Datenkompression
-Praktikumsprojekt für Datenkpmpression.
+Praktikumsprojekt für Datenkompression.
