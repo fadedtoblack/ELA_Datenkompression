@@ -11,4 +11,3 @@ Praktikumsprojekt für Datenkompression.
     vergleichen, sind sie jeweils in Textdateien zu speichern.
     Der zur Überprüfung aus den berechneten Quantisierungstabellen approximierte
     Qualitätswert ist geeignet anzuzeigen bzw. zu speichern.
-- [ ] 
