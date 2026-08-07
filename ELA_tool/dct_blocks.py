@@ -300,3 +300,74 @@ if __name__ == "__main__":
     arr = np.random.randint(0, 256, size=(256, 256))
     ent = compute_entropy(arr)
     print(f"Entropy of 256×256 uniform random uint8 image: {ent:.4f} bits  (expected ≈ 8.0)")
+
+
+# DCT anhand der Formel: (von ChatGPT)
+
+
+def c(k):
+    """Berechnet den Faktor C_u bzw. C_v."""
+    return 1 / np.sqrt(2) if k == 0 else 1
+
+def dct2(block):
+    """
+    Berechnet die 2D-DCT eines 8x8-Blocks.
+    block: 8x8 NumPy-Array
+    """
+    S = np.zeros((8, 8))
+
+    for u in range(8):
+        for v in range(8):
+            s = 0.0
+            for x in range(8):
+                for y in range(8):
+                    s += (block[y, x] *
+                          np.cos((2*x + 1) * u * np.pi / 16) *
+                          np.cos((2*y + 1) * v * np.pi / 16))
+
+            S[v, u] = 0.25 * c(u) * c(v) * s
+
+    return S
+
+# IDCT nach der Formel:
+
+def idct2(S):
+    """
+    Berechnet die inverse 2D-DCT.
+    S: 8x8 DCT-Koeffizienten
+    """
+    block = np.zeros((8, 8))
+
+    for x in range(8):
+        for y in range(8):
+            s = 0.0
+            for u in range(8):
+                for v in range(8):
+                    s += (c(u) * c(v) * S[v, u] *
+                          np.cos((2*x + 1) * u * np.pi / 16) *
+                          np.cos((2*y + 1) * v * np.pi / 16))
+
+            block[y, x] = 0.25 * s
+
+    return block
+
+#Beispiel:
+block = np.array([
+    [52, 55, 61, 66, 70, 61, 64, 73],
+    [63, 59, 55, 90,109, 85, 69, 72],
+    [62, 59, 68,113,144,104, 66, 73],
+    [63, 58, 71,122,154,106, 70, 69],
+    [67, 61, 68,104,126, 88, 68, 70],
+    [79, 65, 60, 70, 77, 68, 58, 75],
+    [85, 71, 64, 59, 55, 61, 65, 83],
+    [87, 79, 69, 68, 65, 76, 78, 94]
+], dtype=float)
+
+S = dct2(block)
+rekonstruiert = idct2(S)
+
+print("DCT:")
+print(np.round(S, 2))
+
+print("\nRekonstruiertes Bild:")
+print(np.round(rekonstruiert))
