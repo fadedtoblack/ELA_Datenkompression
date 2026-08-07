@@ -28,23 +28,23 @@ def generate_ela(image_path: str,
                  output_dir: str = "ELA_tool\output",
                  save_intermediates: bool = False) -> np.ndarray:
     """
-    Generate an ELA image for a given input image.
+    Generiert das ELA-Bild fuer das Input-Bild
 
-    Steps:
-        1. Encode the input image at the given quality.
-        2. Decode to obtain the reproduced image.
-        3. Compute the pixel-wise absolute difference, scaled by M.
-        4. Clip to [0, 255] and save as PNG.
+    Ablauf:
+        1. Encoded das Input-Bild mit der angegeben Qualitaet G (quality)
+        2. Decodiert um das reproduzierte Bild zu erhalten
+        3. Berechnet die pixel-weise abolute Differenz, skaliert durch M (multiplier)
+        4. Begrenzen auf [0, 255] und abbspeichern als PNG
 
-    Parameters
+    Parameter
     ----------
-    image_path         : str   – path to the input image (JPEG recommended)
-    quality            : float – JPEG quality value Q in (0, 100]
-    multiplier         : float – contrast enhancement multiplier M
-    output_dir         : str   – directory for all output files
-    save_intermediates : bool  – also save encoder intermediate text files
+    image_path         : str -> Dateipfad des Input-Bildes (JPEG ist empfohlen)
+    quality            : float -> JPEG-Qualitaets-Wert Q (0, 100]
+    multiplier         : float -> Kontrastverstaerkungsmultiplier M
+    output_dir         : str -> Pfad fuer die Output-Bilder
+    save_intermediates : bool -> speichert auch temporaere Techtdateien des Encoders
 
-    Returns
+    Ausgabe
     -------
     ela_image : np.ndarray, shape (H, W, 3), dtype uint8
     """
@@ -55,9 +55,14 @@ def generate_ela(image_path: str,
     print(f"ELA: {base_name}  |  Q={quality:.0f}%  |  M={multiplier:.0f}")
     print(f"{'='*60}")
 
-    # -----------------------------------------------------------------------
-    # 1 & 2. Encode + decode
-    # -----------------------------------------------------------------------
+ 
+    # --------- 1 & 2. Encoden + Decoden -------------------------------------
+    """
+    Beginn des Encoding-Prozess anhand der uebergebenen Parameter, das Ergebnis
+    wird in Variable (enc_result) gespeichert und anschliessend ausgegeben.
+
+    """
+
     enc_result = encode(
         image_path,
         quality=quality,
@@ -72,20 +77,16 @@ def generate_ela(image_path: str,
                                    output_dir=output_dir,
                                    image_name=repro_name)
 
-    # -----------------------------------------------------------------------
-    # 3. Compute ELA image  (Equation 2.8)
-    #
+    # --------- 3. ELA Bild erstellen ------------------------------------------
     #   ELA_pixel = clip( |input - reproduced| * M, 0, 255 )
-    # -----------------------------------------------------------------------
+
     original_rgb = enc_result.original_rgb.astype(np.float64)
     reproduced_f = reproduced_rgb.astype(np.float64)
 
     ela_float = np.abs(original_rgb - reproduced_f) * multiplier  # Eq. 2.8
     ela_image = np.clip(ela_float, 0.0, 255.0).astype(np.uint8)
 
-    # -----------------------------------------------------------------------
-    # 4. Save ELA image
-    # -----------------------------------------------------------------------
+    # --------- 4. Save ELA image -------------------------------------------
     ela_name = f"{base_name}_ela_q{quality:.0f}_m{multiplier:.0f}.png"
     ela_path = os.path.join(output_dir, ela_name)
     Image.fromarray(ela_image, mode="RGB").save(ela_path)

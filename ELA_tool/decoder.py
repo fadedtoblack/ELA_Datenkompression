@@ -1,9 +1,7 @@
 """
 decoder.py
 ----------
-JPEG-style decoder for the ELA-Tool (SoSe 2026).
-
-Pipeline (Section 2.3.1 / Figure 3):
+Pipeline:
     1. Receive quantized DCT coefficients from the encoder
     2. De-quantize
     3. Inverse 2-D DCT per block (IDCT, level shift +128 applied inside)

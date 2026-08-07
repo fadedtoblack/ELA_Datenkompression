@@ -1,7 +1,7 @@
 """
 main.py
 -------
-Command-line interface for the ELA-Tool (SoSe 2026).
+Kommandozeilen Interface fuer das ELA-Tool
 
 Usage examples
 --------------
@@ -24,6 +24,15 @@ def cmd_encode(args):
     from encoder import encode
     from decoder import decode
 
+    """
+    Importiert encode und decode und kodiert das Eingabebild mit 
+    gegebener Qualitaetsstufe (quality). 
+    Dekodiert das Ergebnis direkt wieder und speichert es als 
+    'reproduziertes' Bild mit dem Dateinamen wie 'bild_reproduced_q60.png'.
+    --save_intermediates speichert Zwischenschritte (was genau??)
+    --output_dir bestimmt  Ausgabeorder (default: ./output)
+    """
+
     enc = encode(
         args.image,
         quality=args.quality,
@@ -38,6 +47,13 @@ def cmd_encode(args):
 def cmd_ela(args):
     from ela import generate_ela
 
+    """
+    Importiert ela und erzeugt das ELA-Bild. 
+    Das Originalbild wird mit fester Qualitaet (--quality, Default: 75)
+    komprimiert und die Differenz zum Original wird mit einem Kontrast-Multiplikator
+    (--multiplier, Default: 30) sichtbar gemacht. 
+    """
+
     generate_ela(
         args.image,
         quality=args.quality,
@@ -48,7 +64,12 @@ def cmd_ela(args):
 
 
 def cmd_test(_args):
-    """Run self-tests for each module."""
+    """
+    Fuehrt Selbsttest fuer die einzelnen Module (quantization, colorspace, dct_blocks)
+    durch. 
+    Jedes Modul wird als eigene Python_Subprozess ausgefuehrt (subprocess.run).
+    Gibt eine Statusmeldung aus je nach Exit-Code ()
+    """
     import subprocess, sys
 
     modules = [
@@ -72,6 +93,12 @@ def cmd_test(_args):
 
 
 def build_parser() -> argparse.ArgumentParser:
+
+    """
+    Baut das komplette ArgumentParser mit allen Subcommands und Optionen auf.
+    Jeder Subparser bekommt via 'set_defaults(func=..)' seine zugehoerige Funktion zugewiesen. 
+    """
+
     parser = argparse.ArgumentParser(
         prog="ela_tool",
         description="JPEG-based ELA Tool – Datenkompression Praktikum SoSe 2026",

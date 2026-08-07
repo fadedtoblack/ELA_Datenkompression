@@ -1,7 +1,6 @@
 """
 encoder.py
 ----------
-JPEG-style encoder for the ELA-Tool (SoSe 2026).
 
 Pipeline (Section 2.2.1 / Figure 1):
     1. Load input image (PNG or JPEG)
@@ -14,7 +13,12 @@ Pipeline (Section 2.2.1 / Figure 1):
     8. Return quantized DCT coefficients to the decoder
 
 No entropy coding or JPEG header generation is performed, as specified.
+
+
+Bild-Kompression
 """
+
+
 
 import os
 import numpy as np
@@ -28,7 +32,16 @@ from quantization import (compute_all_qtables, save_qtables_to_file,
 
 
 class EncoderResult:
-    """Container for all outputs produced by the encoder."""
+    """
+    Container fuer alle Outputs, die vom Encoder produziert werden.
+
+        q_dct: quantisierte DCT_Koeffizient pro Kanal (Y,Cb,Cr) -> eigentliche 'komprimierte' Information
+        original_shapes: urspruenglichen Bildmasse pro Komponente (wichtig beim Zerlegen in 8x8-Bloecke)
+        qtables: verwendete Quantisierungstabellen
+        original_rgb: Originalbild, nur fuer spaeteren Vergleich wichtig
+        entropies: Statistik-Werte fuer den Bericht
+        quality/estimated_quality: angeforderte vs. die aus Tabelle zurueckrerechnete Qualitaet
+    """
 
     def __init__(self):
         # Quantized DCT coefficients for each component
@@ -51,10 +64,11 @@ def encode(image_path: str,
            quality: float = 50.0,
            save_intermediates: bool = False,
            output_dir: str = "output") -> EncoderResult:
+    
     """
     Run the full encoder pipeline on an image file.
 
-    Parameters
+    Parameter
     ----------
     image_path         : str   – path to PNG or JPEG input image
     quality            : float – quality value Q in (0, 100]
@@ -72,17 +86,20 @@ def encode(image_path: str,
     result = EncoderResult()
     result.quality = quality
 
-    # ------------------------------------------------------------------
-    # 1. Load image
-    # ------------------------------------------------------------------
+
+    # --------- 1. Bild laden -----------------------------------------
+    # load_image aus colorspace.py 
+
     print(f"[Encoder] Loading image: {image_path}")
-    rgb = load_image(image_path)
+    rgb = load_image(image_path)  
     result.original_rgb = rgb
     print(f"  Image size: {rgb.shape[1]}×{rgb.shape[0]}  (W×H)")
 
-    # ------------------------------------------------------------------
-    # 2. Compute quantization tables for the given quality value
-    # ------------------------------------------------------------------
+    
+    # --------- 2. Quantisierungstabellen berechnen --------------------
+    # aus quality-Wert werden die eigentlichen 8x8-Quantisierungstabellen berechnet 
+    # estimate_quality() rechnet Tabellen zurueck, welche Qualitaet sie 'eigentlich' repraesentieren
+
     qtables = compute_all_qtables(quality)
     result.qtables = qtables
     result.estimated_quality = estimate_quality(qtables)
@@ -94,18 +111,18 @@ def encode(image_path: str,
         save_qtables_to_file(qtables, quality, qt_path)
         print(f"  Saved quantization tables: {qt_path}")
 
-    # ------------------------------------------------------------------
-    # 3. RGB → YCbCr colour space transformation
-    # ------------------------------------------------------------------
+
+    # --------- 3. Farbraumtransformation RGB -> YCbCr ------------------
+
     print("[Encoder] RGB → YCbCr colour space transformation …")
     Y, Cb, Cr = rgb_to_ycbcr(rgb)
 
-    # Entropy of R, G, B channels
+    # Entropie der R, G, B Kanaele
     result.entropies["H_R"]  = compute_entropy(rgb[:, :, 0])
     result.entropies["H_G"]  = compute_entropy(rgb[:, :, 1])
     result.entropies["H_B"]  = compute_entropy(rgb[:, :, 2])
 
-    # Entropy of Y, Cb, Cr channels
+    # Entropien der Y (Luminanz), Cb und Cr (Chrominanz) Kanaele
     result.entropies["H_Y"]  = compute_entropy(Y)
     result.entropies["H_Cb"] = compute_entropy(Cb)
     result.entropies["H_Cr"] = compute_entropy(Cr)
@@ -121,9 +138,10 @@ def encode(image_path: str,
             save_blocks_to_file(blks, txt_path)
             print(f"  Saved colour-space blocks: {txt_path}")
 
-    # ------------------------------------------------------------------
-    # 4. 8×8 block decomposition  +  5. Forward DCT
-    # ------------------------------------------------------------------
+
+    
+    # --------- 4. 8×8 Block-Zerlegung  +  5. DCT ----------------------
+
     print("[Encoder] Block decomposition and DCT …")
     components = {"Y": Y, "Cb": Cb, "Cr": Cr}
     dct_results  = {}
@@ -141,9 +159,9 @@ def encode(image_path: str,
         # Entropy of DCT coefficients
         result.entropies[f"H_{comp_name}_dct"] = compute_entropy(dct_blks)
 
-        # ------------------------------------------------------------------
-        # 6. Quantize
-        # ------------------------------------------------------------------
+
+        # --------- 6. Quantisierung ---------------------------------------
+
         q_key = "Y" if comp_name == "Y" else "Cb"  # Cb and Cr share chroma table
         q_blks = quantize_blocks(dct_blks, qtables[comp_name])
         qdct_results[comp_name] = q_blks
@@ -167,9 +185,9 @@ def encode(image_path: str,
 
     result.q_dct = qdct_results
 
-    # ------------------------------------------------------------------
-    # 7. Print entropy summary (12 values, Section 2.2.6)
-    # ------------------------------------------------------------------
+
+    # --------- 7. Ausgabe der Zusammenfassung aller Entropien ---------
+    
     _print_entropies(result.entropies)
 
     # Optionally save entropy to file
