@@ -23,7 +23,8 @@ from encoder    import EncoderResult
 
 def decode(enc_result: EncoderResult,
            output_dir: str = "ELA_tool\output",
-           image_name: str = "reproduced") -> tuple[np.ndarray, float]:
+           image_name: str = "reproduced",
+           save_output: bool = True) -> tuple[np.ndarray, float]: # NEUER PARAMETER damit die GUI nicht automatisch speichert nach jedem Slider-Update -> Default True wird nur bei benutzen der GUI auf False gesetzt
     """
     Run the full decoder pipeline using the output of the encoder.
 
@@ -78,9 +79,12 @@ def decode(enc_result: EncoderResult,
     # ------------------------------------------------------------------
     # 5. Save reproduced image as PNG  (Section 2.3.1)
     # ------------------------------------------------------------------
-    out_path = os.path.join(output_dir, f"{image_name}.png")
-    Image.fromarray(reproduced_rgb, mode="RGB").save(out_path)
-    print(f"[Decoder] Reproduced image saved: {out_path}")
+    if save_output:
+        out_path = os.path.join(output_dir, f"{image_name}.png")
+        Image.fromarray(reproduced_rgb, mode="RGB").save(out_path)
+        print(f"[Decoder] Reproduced image saved: {out_path}")
+    else:
+         print("[Decoder] save_output=False -> reproduced image not written to disk")
 
     # ------------------------------------------------------------------
     # 6. Compute PSNR  (Section 2.3.2, Equations 2.6 / 2.7)

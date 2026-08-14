@@ -23,10 +23,11 @@ from decoder    import decode, compute_psnr
 
 
 def generate_ela(image_path: str,
-                 quality: float = 75.0,
-                 multiplier: float = 30.0,
-                 output_dir: str = "ELA_tool\output",
-                 save_intermediates: bool = False) -> np.ndarray:
+                quality: float = 75.0,
+                multiplier: float = 30.0,
+                output_dir: str = "ELA_tool\output",
+                save_intermediates: bool = False,
+                save_output: bool = True) -> np.ndarray: # NEUER PARAMETER damit die GUI nicht automatisch speichert nach jedem Slider-Update
     """
     Generiert das ELA-Bild fuer das Input-Bild
 
@@ -43,7 +44,7 @@ def generate_ela(image_path: str,
     multiplier         : float -> Kontrastverstaerkungsmultiplier M
     output_dir         : str -> Pfad fuer die Output-Bilder
     save_intermediates : bool -> speichert auch temporaere Techtdateien des Encoders
-
+    save_output        : bool -> speichert das erzeugte ELA-Bild
     Ausgabe
     -------
     ela_image : np.ndarray, shape (H, W, 3), dtype uint8
@@ -86,11 +87,18 @@ def generate_ela(image_path: str,
     ela_float = np.abs(original_rgb - reproduced_f) * multiplier  # Eq. 2.8
     ela_image = np.clip(ela_float, 0.0, 255.0).astype(np.uint8)
 
-    # --------- 4. Save ELA image -------------------------------------------
-    ela_name = f"{base_name}_ela_q{quality:.0f}_m{multiplier:.0f}.png"
-    ela_path = os.path.join(output_dir, ela_name)
-    Image.fromarray(ela_image, mode="RGB").save(ela_path)
-    print(f"\n[ELA] ELA image saved: {ela_path}")
-    print(f"[ELA] PSNR (original vs reproduced): {psnr:.4f} dB")
+    # --------- 4. ELA-Bild speichern -------------------------------------------
+
+    if save_output:
+        ela_name = f"{base_name}_ela_q{quality:.0f}_m{multiplier:.0f}.png"
+        ela_path = os.path.join(output_dir, ela_name)
+        Image.fromarray(ela_image, mode="RGB").save(ela_path)
+        print(f"\n[ELA] ELA-Bild gespeichert im Ordner: {ela_path}")
+        print(f"[ELA] PSNR (original vs reproduced): {psnr:.4f} dB")
+
+    else:
+        # Hinweis, wenn ELA-Bild nicht gespeichert wird (z.B. bei GUI-Slider-Updates)
+        print(f"\n[ELA] save_output=False -> ELA image not written to disk")
+        print(f"[ELA] PSNR (original vs reproduced): {psnr:.4f} dB")
 
     return ela_image

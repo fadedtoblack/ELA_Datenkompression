@@ -78,8 +78,8 @@ def update_image(*args):
     img = pic_old.copy()
 
     # Werte aus dem Slider holen 
-    quality_val = quality_val.get()
-    multiplier_val = multiplier_val.get()
+    quality_val = quality_var.get()
+    multiplier_val = multiplier_var.get()
 
     # ELA-Bild berechnen OHNE speichern nach Aenderung der Sliderwerte
     ela_array = generate_ela(
@@ -113,8 +113,8 @@ def save_pic():
         print("Kein Bild vorhanden!")
         return
 
-    quality_val = quality_val.get()
-    multiplier_val = multiplier_val.get()
+    quality_val = quality_var.get()
+    multiplier_val = multiplier_var.get()
 
     ausgabe_ordner = filedialog.askdirectory(title="Ausgabeordner auswählen")
     if not ausgabe_ordner:
@@ -199,6 +199,7 @@ scale_quality = ttk.Scale(para_frame,
                         command=lambda v: update_label(v, lbl_quality_out)
                         )
 scale_quality.grid(column=0, row=1)
+scale_quality.bind("<ButtonRelease-1>", on_slider_release)  # Event-Handler für Slider loslassen
 
 lbl_quality_out =tk.Label(para_frame, anchor="center", text="75.00") # Default bei 75.00
 lbl_quality_out.grid(column=0, row=2)
