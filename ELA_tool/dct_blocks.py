@@ -12,12 +12,8 @@ used by the JPEG standard.
 """
 
 import numpy as np
-from scipy.fft import dctn, idctn
 
-
-# ---------------------------------------------------------------------------
-# 8×8 block decomposition and reassembly
-# ---------------------------------------------------------------------------
+# 8×8 block decomposition and reassembly -------------------------------
 
 def split_into_blocks(component: np.ndarray) -> tuple[np.ndarray, tuple]:
     """
@@ -79,49 +75,34 @@ def merge_blocks(blocks: np.ndarray, original_shape: tuple) -> np.ndarray:
     H, W = original_shape
     return component[:H, :W]
 
+# DCT and IDCT (JPEG-Standard T.81, A.3.3)---------
 
-# ---------------------------------------------------------------------------
-# 2-D DCT and IDCT (JPEG standard T.81, A.3.3)
-# ---------------------------------------------------------------------------
-# The JPEG standard uses the orthonormal DCT-II, which is equivalent to
-# scipy's dctn with norm="ortho" and type=2.
-# The inverse is the DCT-III (idctn with norm="ortho", type=2).
-# ---------------------------------------------------------------------------
+# Vorberechnung der DCT-Transformationsmatrix (8x8)
+def get_dct_matrix():
+    T = np.zeros((8, 8))
+    for u in range(8):
+        c = 1 / np.sqrt(2) if u == 0 else 1.0
+        for x in range(8):
+            T[u, x] = 0.5 * c * np.cos((2 * x + 1) * u * np.pi / 16)
+    return T
 
-def dct2d(block: np.ndarray) -> np.ndarray:
-    """
-    Apply the 2-D forward DCT (DCT-II, orthonormal) to an 8×8 block.
+DCT_MATRIX = get_dct_matrix()
 
-    Input values should be level-shifted by -128 before calling this
-    function (as required by the JPEG standard).
+# DCT anhand der Formel:
 
-    Parameters
-    ----------
-    block : np.ndarray, shape (8, 8), dtype float64
+def c(k):
+    """Berechnet den Faktor C_u bzw. C_v."""
+    return 1 / np.sqrt(2) if k == 0 else 1
 
-    Returns
-    -------
-    np.ndarray, shape (8, 8), dtype float64 – DCT coefficients
-    """
-    return dctn(block, type=2, norm="ortho")
+def dct2(block: np.ndarray) -> np.ndarray:
+    # Manuelle DCT mittels Matrixmultiplikation
+    return DCT_MATRIX @ block @ DCT_MATRIX.T
 
+# IDCT nach der Formel:
 
-def idct2d(block: np.ndarray) -> np.ndarray:
-    """
-    Apply the 2-D inverse DCT (DCT-III, orthonormal) to an 8×8 block.
-
-    The output must be level-shifted back by +128 after calling this
-    function.
-
-    Parameters
-    ----------
-    block : np.ndarray, shape (8, 8), dtype float64 – DCT coefficients
-
-    Returns
-    -------
-    np.ndarray, shape (8, 8), dtype float64 – spatial-domain values
-    """
-    return idctn(block, type=2, norm="ortho")
+def idct2(S: np.ndarray) -> np.ndarray:
+    # Manuelle IDCT mittels Matrixmultiplikation
+    return DCT_MATRIX.T @ S @ DCT_MATRIX
 
 
 def apply_dct_to_blocks(blocks: np.ndarray) -> np.ndarray:
@@ -142,7 +123,7 @@ def apply_dct_to_blocks(blocks: np.ndarray) -> np.ndarray:
     dct_blocks = np.zeros_like(shifted)
     for i in range(n_h):
         for j in range(n_w):
-            dct_blocks[i, j] = dct2d(shifted[i, j])
+            dct_blocks[i, j] = dct2(shifted[i, j])
     return dct_blocks
 
 
@@ -162,14 +143,11 @@ def apply_idct_to_blocks(dct_blocks: np.ndarray) -> np.ndarray:
     spatial = np.zeros_like(dct_blocks)
     for i in range(n_h):
         for j in range(n_w):
-            spatial[i, j] = idct2d(dct_blocks[i, j])
+            spatial[i, j] = idct2(dct_blocks[i, j])
     spatial += 128.0                                # undo level shift
     return spatial
 
-
-# ---------------------------------------------------------------------------
-# Quantization and de-quantization (T.81, A.3.6)
-# ---------------------------------------------------------------------------
+# Quantisierung und Dequantisierung ------------------------------------------
 
 def quantize_blocks(dct_blocks: np.ndarray, qtable: np.ndarray) -> np.ndarray:
     """
@@ -204,10 +182,7 @@ def dequantize_blocks(q_blocks: np.ndarray, qtable: np.ndarray) -> np.ndarray:
     """
     return q_blocks.astype(np.float64) * qtable.astype(np.float64)
 
-
-# ---------------------------------------------------------------------------
-# Text-file output of 8×8 blocks (Section 2.2.2)
-# ---------------------------------------------------------------------------
+# Auslesen der 8×8 Blöcke in Textdatei ----------------------------
 
 def save_blocks_to_file(blocks: np.ndarray, filepath: str) -> None:
     """
@@ -234,10 +209,7 @@ def save_blocks_to_file(blocks: np.ndarray, filepath: str) -> None:
                 f.write(f"Block: {block_num}\n{values}\n")
                 block_num += 1
 
-
-# ---------------------------------------------------------------------------
-# Entropy calculation (Section 2.2.6)
-# ---------------------------------------------------------------------------
+# Entropieberechnung (Section 2.2.6)-----------
 
 def compute_entropy(data: np.ndarray) -> float:
     """
@@ -267,10 +239,7 @@ def compute_entropy(data: np.ndarray) -> float:
     probs = probs[probs > 0]
     return float(-np.sum(probs * np.log2(probs)))
 
-
-# ---------------------------------------------------------------------------
-# Quick self-test
-# ---------------------------------------------------------------------------
+# Quick self-test (drin lassen?) ------------------
 
 if __name__ == "__main__":
     print("=== DCT / block module self-test ===\n")
@@ -284,8 +253,8 @@ if __name__ == "__main__":
 
     # 2. DCT → IDCT round-trip on a single block
     block = np.random.rand(8, 8) * 255.0 - 128.0
-    coeffs = dct2d(block)
-    reconstructed = idct2d(coeffs)
+    coeffs = dct2(block)
+    reconstructed = idct2(coeffs)
     print(f"DCT/IDCT round-trip max error: {np.max(np.abs(block - reconstructed)):.2e}")
 
     # 3. Quantize / de-quantize
@@ -301,19 +270,13 @@ if __name__ == "__main__":
     ent = compute_entropy(arr)
     print(f"Entropy of 256×256 uniform random uint8 image: {ent:.4f} bits  (expected ≈ 8.0)")
 
-
-# DCT anhand der Formel: (von ChatGPT)
-
-
-def c(k):
-    """Berechnet den Faktor C_u bzw. C_v."""
-    return 1 / np.sqrt(2) if k == 0 else 1
+""" Kann nicht benutzt werden, da zu langsam
 
 def dct2(block):
-    """
+
     Berechnet die 2D-DCT eines 8x8-Blocks.
     block: 8x8 NumPy-Array
-    """
+
     S = np.zeros((8, 8))
 
     for u in range(8):
@@ -329,13 +292,11 @@ def dct2(block):
 
     return S
 
-# IDCT nach der Formel:
+    def idct2(S):
 
-def idct2(S):
-    """
     Berechnet die inverse 2D-DCT.
     S: 8x8 DCT-Koeffizienten
-    """
+
     block = np.zeros((8, 8))
 
     for x in range(8):
@@ -349,10 +310,10 @@ def idct2(S):
 
             block[y, x] = 0.25 * s
 
-    return block
+    return block """
 
 #Beispiel:
-block = np.array([
+""" block = np.array([
     [52, 55, 61, 66, 70, 61, 64, 73],
     [63, 59, 55, 90,109, 85, 69, 72],
     [62, 59, 68,113,144,104, 66, 73],
@@ -370,4 +331,4 @@ print("DCT:")
 print(np.round(S, 2))
 
 print("\nRekonstruiertes Bild:")
-print(np.round(rekonstruiert))
+print(np.round(rekonstruiert)) """

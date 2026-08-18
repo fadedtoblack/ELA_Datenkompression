@@ -15,7 +15,7 @@ Note: No chroma subsampling is performed, as required by the assignment spec
 
 import numpy as np
 from PIL import Image
-
+import os
 
 # ---------------------------------------------------------------------------
 # ITU-R BT.601-4 forward transform:  RGB → YCbCr
@@ -60,9 +60,14 @@ def rgb_to_ycbcr(image_rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
     B = img[:, :, 2]
 
     # ITU-R BT.601-4 forward transform (studio swing / limited range)
-    Y  =  16.0 + 65.481 * R / 255.0 + 128.553 * G / 255.0 +  24.966 * B / 255.0
-    Cb = 128.0 - 37.797 * R / 255.0 -  74.203 * G / 255.0 + 112.000 * B / 255.0
-    Cr = 128.0 + 112.000 * R / 255.0 - 93.786 * G / 255.0 -  18.214 * B / 255.0
+    # Y  =  16.0 + 65.481 * R / 255.0 + 128.553 * G / 255.0 +  24.966 * B / 255.0
+    # Cb = 128.0 - 37.797 * R / 255.0 -  74.203 * G / 255.0 + 112.000 * B / 255.0
+    # Cr = 128.0 + 112.000 * R / 255.0 - 93.786 * G / 255.0 -  18.214 * B / 255.0
+
+    # sollte sein
+    Y  = 0.299 * R  + 0.587 * G + 0.114 * B
+    Cb = 128 - 0.169 * R - 0.331 * G + 0.500 * B
+    Cr = 128 + 0.500 * R - 0.419 * G - 0.081 * B
 
     return Y, Cb, Cr
 
@@ -85,23 +90,19 @@ def ycbcr_to_rgb(Y: np.ndarray, Cb: np.ndarray, Cr: np.ndarray) -> np.ndarray:
     np.ndarray, shape (H, W, 3), dtype uint8
         Reconstructed RGB image, pixel values clipped to [0, 255].
     """
-    # Shift chroma channels
+    # Shift der Chroma-Channel
     cb = Cb - 128.0
     cr = Cr - 128.0
-    y  = Y  -  16.0
 
-    # ITU-R BT.601-4 inverse transform
-    R = 255.0 / 219.0 * y                          + 255.0 / 112.0 * 0.701       * cr
-    G = 255.0 / 219.0 * y - 255.0 / 112.0 * 0.886 * 0.114 / 0.587 * cb \
-                           - 255.0 / 112.0 * 0.701 * 0.299 / 0.587 * cr
-    B = 255.0 / 219.0 * y + 255.0 / 112.0 * 0.886                  * cb
+    R = Y + 1.402 * cr
+    G = Y - 0.34414 * cb - 0.71414 * cr
+    B = Y + 1.772 * cb
 
     R = np.clip(np.round(R), 0, 255)
     G = np.clip(np.round(G), 0, 255)
     B = np.clip(np.round(B), 0, 255)
 
     return np.stack([R, G, B], axis=2).astype(np.uint8)
-
 
 # ---------------------------------------------------------------------------
 # Helper: save individual Y / Cb / Cr component images for visual inspection
@@ -121,7 +122,6 @@ def save_component_images(Y: np.ndarray, Cb: np.ndarray, Cr: np.ndarray,
     base_name   : str  – e.g. "kodim07"
     output_dir  : str  – directory to write images into
     """
-    import os
     os.makedirs(output_dir, exist_ok=True)
 
     for component, data in (("y", Y), ("cb", Cb), ("cr", Cr)):
