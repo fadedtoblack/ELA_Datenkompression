@@ -117,6 +117,10 @@ def encode(image_path: str,
     print("[Encoder] RGB → YCbCr colour space transformation …")
     Y, Cb, Cr = rgb_to_ycbcr(rgb)
 
+    Y  = np.clip(np.round(Y),  0, 255)
+    Cb = np.clip(np.round(Cb), 0, 255)
+    Cr = np.clip(np.round(Cr), 0, 255)
+
     # Entropie der R, G, B Kanaele
     result.entropies["H_R"]  = compute_entropy(rgb[:, :, 0])
     result.entropies["H_G"]  = compute_entropy(rgb[:, :, 1])

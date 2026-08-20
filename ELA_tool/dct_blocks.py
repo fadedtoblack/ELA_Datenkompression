@@ -118,7 +118,7 @@ def apply_dct_to_blocks(blocks: np.ndarray) -> np.ndarray:
     -------
     np.ndarray, shape (n_h, n_w, 8, 8) – DCT coefficients (float64)
     """
-    shifted = blocks.astype(np.float64) - 128.0    # level shift (T.81 A.3.1)
+    shifted = blocks.astype(np.float64)    # level shift (T.81 A.3.1), wurde hier entfernt damit Werte in den txts stimmen
     n_h, n_w = blocks.shape[:2]
     dct_blocks = np.zeros_like(shifted)
     for i in range(n_h):
@@ -144,7 +144,7 @@ def apply_idct_to_blocks(dct_blocks: np.ndarray) -> np.ndarray:
     for i in range(n_h):
         for j in range(n_w):
             spatial[i, j] = idct2(dct_blocks[i, j])
-    spatial += 128.0                                # undo level shift
+    #spatial += 128.0                                # undo level shift
     return spatial
 
 # Quantisierung und Dequantisierung ------------------------------------------
@@ -184,7 +184,7 @@ def dequantize_blocks(q_blocks: np.ndarray, qtable: np.ndarray) -> np.ndarray:
 
 # Auslesen der 8×8 Blöcke in Textdatei ----------------------------
 
-def save_blocks_to_file(blocks: np.ndarray, filepath: str) -> None:
+def save_blocks_to_file(blocks: np.ndarray, filepath: str,decimals: int = 3, eps: float = 1e-6) -> None:
     """
     Write all 8×8 blocks to a text file in the format required by the
     assignment (Section 2.2.2):
@@ -204,8 +204,11 @@ def save_blocks_to_file(blocks: np.ndarray, filepath: str) -> None:
     with open(filepath, "w") as f:
         for i in range(n_h):
             for j in range(n_w):
-                flat = blocks[i, j].flatten()
-                values = "; ".join(f"{k+1}: {flat[k]:.4g}" for k in range(64))
+                flat = blocks[i, j].flatten().astype(np.float64)
+                cleaned = np.where(np.abs(flat) < eps, 0.0, flat)
+                values = "; ".join(
+                    f"{k+1}: {cleaned[k]:.{decimals}f}" for k in range(64)
+                )
                 f.write(f"Block: {block_num}\n{values}\n")
                 block_num += 1
 
