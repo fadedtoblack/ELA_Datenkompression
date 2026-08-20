@@ -80,7 +80,9 @@ def estimate_quality(qtables: dict) -> float:
 
     # Approximiere Qualitaetswert
     d  = (abs(mean_y - mean_cb) + abs(mean_y - mean_cr)) * 0.49  
-    q  = 100.0 - mu + d                                         
+    q  = 100.0 - mu + d  
+    
+    q = max(0.0, min(100.0, q))                                       
     return q
 
 
