@@ -35,19 +35,9 @@ def datei_auswaehlen():
         pic_old = Image.open(dateipfad)
         pic_new = pic_old.copy()
 
-        # Anzeige des alten Bildes
-        img_old = resize_image(pic_old.copy(), PREVIEW_WIDTH)
-        tk_img_old = ImageTk.PhotoImage(img_old)
+        # Anzeige der Vorschaubilder aktualisieren
+        refresh_previews()  # Vorschau-Bilder aktualisieren
 
-        lbl_pic_old.config(image=tk_img_old)
-        lbl_pic_old.image = tk_img_old
-
-        # Anzeige des neuen Bildes
-        img_new = resize_image(pic_new.copy(), PREVIEW_WIDTH)
-        tk_img_new = ImageTk.PhotoImage(img_new)
-
-        lbl_pic_new.config(image=tk_img_new)
-        lbl_pic_new.image = tk_img_new
 
         lbl_psnr_out.config(text="-") # PSNR-Anzeige zuruecksetzen bei neuem Bild
 
@@ -67,6 +57,64 @@ def update_label(raw_value, label, int_var):
     int_value = int(round(float(raw_value)))
     int_var.set(int_value)
     label.config(text=f"{int_value}")
+
+def _current_preview_width():
+    total_width = root.winfo_width()
+    return max(50, int(total_width * 0.4) - 20)  # mindestens 50 Pixel, sonst 30% der Fensterbreite
+
+def _current_slider_length():
+    total_width = root.winfo_width()
+    return max(80, int(total_width * 0.2) - 20)  # mindestens 80 Pixel, sonst 20% der Fensterbreite
+
+def refresh_previews():
+    """
+    Zeichnet die Original- und ELA-Vorschau-Bilder neu, wenn das 
+    Fenster skaliert wird.
+    """
+    prewiew_width = _current_preview_width()
+
+    if pic_old is not None:
+        img_old = resize_image(pic_old.copy(), prewiew_width)
+        tk_img_old = ImageTk.PhotoImage(img_old)
+        lbl_pic_old.config(image=tk_img_old)
+        lbl_pic_old.image = tk_img_old
+
+    if pic_new is not None:
+        img_new = resize_image(pic_new.copy(), prewiew_width)
+        tk_img_new = ImageTk.PhotoImage(img_new)
+        lbl_pic_new.config(image=tk_img_new)
+        lbl_pic_new.image = tk_img_new
+
+_resize_job = None  # Variable, um den geplanten Job zu speichern
+_RESIZE_DELAY = 150  # Verzögerung in Millisekunden
+
+def on_window_resize(event):
+    """
+    Wird bei jeder Groessenaenderung des Hauptfensters aufgerufen und 
+    passt die Reglerlaenge und die Vorschau-Bilder an.
+    """
+    global _resize_job
+
+    if _resize_job is not None:
+        root.after_cancel(_resize_job)  # Vorherigen Job abbrechen
+
+        _resize_job = root.after(_RESIZE_DELAY, _apply_resize)  # Neuen Job planen
+
+def _apply_resize():
+    """
+    Fuehrt die eigentliche Anpassung der Vorschau-Bilder und Reglerlaenge durch,
+    nachdem die Verzögerung abgelaufen ist.
+    """
+
+    global _resize_job
+    _resize_job = None  # Job abgeschlossen
+
+    new_length = _current_slider_length()
+    scale_quality.config(length=new_length)
+    scale_multiplier.config(length=new_length)
+
+    refresh_previews()  # Vorschau-Bilder aktualisieren
+
 
 
 # Bild live bearbeiten -> ELA-Vorschau berechnen 
@@ -98,10 +146,7 @@ def update_image(*args):
     pic_new = Image.fromarray(ela_array)
     
     #Anzeige skalieren
-    display_img = resize_image(pic_new.copy(), PREVIEW_WIDTH)
-    tk_img = ImageTk.PhotoImage(display_img)
-    lbl_pic_new.config(image=tk_img)
-    lbl_pic_new.image = tk_img
+    refresh_previews()
 
 
 # Berechnung des ELA-Bildes beim loslassen des Sliders
@@ -159,8 +204,9 @@ pic_new = None
 dateipfad_global = None
 
 # Einstellung Spaltengröße 
-for i in range(3):
-    root.columnconfigure(i, weight=1)
+root.columnconfigure(0, weight=2)
+root.columnconfigure(1, weight=1)
+root.columnconfigure(2, weight=2)
 
 # Label Anfangstext
 lbl_text = tk.Label(root, text="ELA-Tool: Einführungstext: Bild auswählen, Quality (Q) und Multiplier (M) einstellen, um das ELA-Bild live zu berechnen. ", wraplength=600, justify="center")
@@ -255,6 +301,9 @@ chk_intermediates.grid(column=1, row=3)
 # Speicherbutton 
 btn_save = tk.Button(root, text="ELA-Bild speichern", command=save_pic, anchor="center")
 btn_save.grid(column=1, row=4)
+
+# Groessenänderung des Fensters abfangen, um die Vorschau-Bilder und Slider-Längen anzupassen
+root.bind("<Configure>", on_window_resize)
 
 
 # starten Event-Loop
