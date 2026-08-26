@@ -56,6 +56,16 @@ def generate_ela(image_path: str,
     print(f"ELA: {base_name}  |  Q={quality:.0f}%  |  M={multiplier:.0f}")
     print(f"{'='*60}")
 
+    def _intermediates_dir(output_dir: str, base_name:str, quality: float) -> str:
+        """
+        Baut den Pfad fuer den Unterordner der Zwischenschritte und legt ihn bei Bedarf an, z.B.:
+            <output_dir>/base_name>_intermediates_q75/
+        """
+
+        path = os.path.join(output_dir, f"{base_name}_intermediates_q{quality:.0f}")
+        os.makedirs(path, exist_ok=True)
+        return path
+
  
     # --------- 1 & 2. Encoden + Decoden -------------------------------------
     """
@@ -68,7 +78,7 @@ def generate_ela(image_path: str,
         image_path,
         quality=quality,
         save_intermediates=save_intermediates,
-        output_dir=output_dir,
+        output_dir=_intermediates_dir(output_dir, base_name, quality) if save_intermediates else output_dir
     )
 
     print(enc_result)
@@ -101,4 +111,4 @@ def generate_ela(image_path: str,
         print(f"\n[ELA] save_output=False -> ELA image not written to disk")
         print(f"[ELA] PSNR (original vs reproduced): {psnr:.4f} dB")
 
-    return ela_image
+    return ela_image, psnr
