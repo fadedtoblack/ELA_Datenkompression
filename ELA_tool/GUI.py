@@ -36,14 +36,14 @@ def datei_auswaehlen():
         pic_new = pic_old.copy()
 
         # Anzeige des alten Bildes
-        img_old = resize_image(pic_old.copy(), 250)
+        img_old = resize_image(pic_old.copy(), PREVIEW_WIDTH)
         tk_img_old = ImageTk.PhotoImage(img_old)
 
         lbl_pic_old.config(image=tk_img_old)
         lbl_pic_old.image = tk_img_old
 
         # Anzeige des neuen Bildes
-        img_new = resize_image(pic_new.copy(), 250)
+        img_new = resize_image(pic_new.copy(), PREVIEW_WIDTH)
         tk_img_new = ImageTk.PhotoImage(img_new)
 
         lbl_pic_new.config(image=tk_img_new)
@@ -63,8 +63,10 @@ def resize_image(img, target_width):
 
 
 # Update der Schieberegler anzeigen 
-def update_label(value, label):
-    label.config(text=f"{float(value):.2f}")
+def update_label(raw_value, label, int_var):
+    int_value = int(round(float(raw_value)))
+    int_var.set(int_value)
+    label.config(text=f"{int_value}")
 
 
 # Bild live bearbeiten -> ELA-Vorschau berechnen 
@@ -82,19 +84,21 @@ def update_image(*args):
     multiplier_val = multiplier_var.get()
 
     # ELA-Bild berechnen OHNE speichern nach Aenderung der Sliderwerte
-    ela_array = generate_ela(
+    ela_array, psnr = generate_ela(
         dateipfad_global,
         quality=quality_val,
         multiplier=multiplier_val,
-        # output_dir="ELA_tool/output",
         save_intermediates=False
     )
+
+    #PSNR-Wert aktualisieren
+    lbl_psnr_out.config(text=f"{psnr:.4f} dB")
 
     # numpy_Array -> PIL-Image,  fuer die die Anzeige und seperates Speichern
     pic_new = Image.fromarray(ela_array)
     
     #Anzeige skalieren
-    display_img = resize_image(pic_new.copy(), 250)
+    display_img = resize_image(pic_new.copy(), PREVIEW_WIDTH)
     tk_img = ImageTk.PhotoImage(display_img)
     lbl_pic_new.config(image=tk_img)
     lbl_pic_new.image = tk_img
@@ -126,7 +130,8 @@ def save_pic():
             quality=quality_val,
             multiplier=multiplier_val,
             output_dir=ausgabe_ordner,
-            save_output=True
+            save_output=True,
+            save_intermediates=save_intermediates_var.get()
         )
         print("ELA_Bild gepseichert im Ordner:", ausgabe_ordner)
     except Exception as e:
@@ -135,11 +140,16 @@ def save_pic():
 
 
 # Erstellen GUI Fenster 
+PREVIEW_WIDTH = 350
+
 root = tk.Tk()
 root.title("ELA - Tool")
-root.geometry("800x400")
-root.minsize(width=800, height=500)       
-root.maxsize(width=800, height=500)
+root.geometry("1200x700")
+root.minsize(width=1000, height=650)  
+
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+root.maxsize(width=screen_width, height=screen_height)  # Maximale Größe auf Bildschirmgröße setzen
 
 # WIDGETS
 
@@ -189,41 +199,39 @@ para_frame.columnconfigure(1, weight=1)
 lbl_quality = tk.Label(para_frame, anchor="center", text="Quality (Q)")
 lbl_quality.grid(column=0, row=0)
 
-quality_var = tk.DoubleVar(value=75.0) # Default bei 75.00
+quality_var = tk.IntVar(value=75) # Default bei 75
+quality_raw = tk.DoubleVar(value=75.0) # Raw-Wert für den Slider, um die Genauigkeit zu erhalten
 
 scale_quality = ttk.Scale(para_frame, 
                         from_=1, to=100, 
                         orient="horizontal",
                         length=150, 
-                        variable=quality_var, 
-                        command=lambda v: update_label(v, lbl_quality_out)
+                        variable=quality_raw, # Regler haengt an der kontinuierlichen Variable, die den genauen Wert speichert
+                        command=lambda v: update_label(v, lbl_quality_out, quality_var)
                         )
 scale_quality.grid(column=0, row=1)
 scale_quality.bind("<ButtonRelease-1>", on_slider_release)  # Event-Handler für Slider loslassen
 
-lbl_quality_out =tk.Label(para_frame, anchor="center", text="75.00") # Default bei 75.00
+lbl_quality_out =tk.Label(para_frame, anchor="center", text="75") # Default bei 75
 lbl_quality_out.grid(column=0, row=2)
-
-#Platzhalter
-ph =tk.Label(para_frame)
-ph.grid(column=0, row=3)
 
 # Parameter 2: Multiplier (M)
 lbl_multiplier = tk.Label(para_frame, anchor="center", text="Multiplier (M)")
 lbl_multiplier.grid(column=0, row=4)
 
-multiplier_var = tk.DoubleVar(value=30.0) # Default bei 30.00
+multiplier_var = tk.IntVar(value=30) # Default bei 30
+multiplier_raw = tk.DoubleVar(value=30.0) # Raw-Wert für den Slider, um die Genauigkeit zu erhalten
 
 scale_multiplier = ttk.Scale(para_frame,
                         from_=1, to=100, 
                         orient="horizontal", 
                         length=150, 
-                        variable=multiplier_var, 
-                        command=lambda v: update_label(v, lbl_multiplier_out))
+                        variable=multiplier_raw, # Regler haengt an der kontinuierlichen Variable, die den genauen Wert speichert
+                        command=lambda v: update_label(v, lbl_multiplier_out, multiplier_var))
 scale_multiplier.grid(column=0, row=5)
 scale_multiplier.bind("<ButtonRelease-1>", on_slider_release)  # Event-Handler für Slider loslassen
 
-lbl_multiplier_out =tk.Label(para_frame, anchor="center", text="30.00") # Default bei 30.00
+lbl_multiplier_out =tk.Label(para_frame, anchor="center", text="30") # Default bei 30
 lbl_multiplier_out.grid(column=0, row=6)
 
 # PSNR - Anzeige
@@ -233,9 +241,20 @@ lbl_psnr.grid(column=0, row=7)
 lbl_psnr_out =tk.Label(para_frame, anchor="center", text="-")
 lbl_psnr_out.grid(column=0, row=8)
 
+# Checkbox um die Intermediates beim Speichern mit zu exportieren
+save_intermediates_var = tk.BooleanVar(value=False)  # Default: nicht speichern
+
+chk_intermediates = tk.Checkbutton(
+    root,
+    text="Intermediates exportieren",
+    variable=save_intermediates_var,
+    anchor="center"
+    )
+chk_intermediates.grid(column=1, row=3)
+
 # Speicherbutton 
 btn_save = tk.Button(root, text="ELA-Bild speichern", command=save_pic, anchor="center")
-btn_save.grid(column=1, row=3)
+btn_save.grid(column=1, row=4)
 
 
 # starten Event-Loop
