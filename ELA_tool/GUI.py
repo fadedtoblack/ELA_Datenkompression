@@ -3,13 +3,92 @@ from tkinter import ttk
 from tkinter import filedialog
 import os
 from PIL import Image, ImageTk
+import threading
+import queue
+import numpy as np
+from encoder import encode
+from decoder import decode
 
 from ela import generate_ela
 
+# CACHE & THREAD-STEUERUNG
+_cache_lock = threading.Lock()
+_cache = {"path": None, "quality": None, "encoder_result": None, "ela_image": None, "psnr": None}
+_compute_generation = 0 # wird bei jeder neuen Berechnunganfrage erhöht
+_computing = False 
+_result_queue = queue.Queue()  # Queue für Ergebnisse der Hintergrundberechnung
+
+def request_quality_computation(path, quality):
+    """
+    Startet encode() + decode() im Hintergrund-Thread.
+    """
+
+    global _compute_generation, _computing
+    with _cache_lock:
+        _compute_generation += 1
+        my_generation = _compute_generation
+        _computing = True
+    lbl_psnr_out.config(text="Berechnung läuft...")
+    start_progress()
+    threading.Thread(target=_background_compute,
+                     args=(path, quality, my_generation),
+                     daemon=True).start()
+    
+def _background_compute(path, quality, generation):
+    encode_result = encode(path, quality=quality, save_intermediates=False)
+    reproduced_rgb, psnr = decode(encode_result, image_name="preview", save_output=False)
+    _result_queue.put((generation, path, quality, encode_result, reproduced_rgb, psnr))
 
 
+def _poll_queue():
+    """
+    Laeuft alle 50ms im Haupt_Thread, holt fertige Ergebnisse ab.
+    """
 
-# FUNKTIONEN
+    global _computing
+    updated = False
+    try:
+        while True:
+            generation, path, quality, encode_result, reproduced_rgb, psnr = _result_queue.get_nowait()
+            with _cache_lock:
+                if generation == _compute_generation:
+                    _cache.update(path=path, 
+                                  quality=quality, 
+                                  encoder_result=encode_result,
+                                  reproduced_rgb=reproduced_rgb,
+                                  psnr=psnr)
+                    _computing = False
+                    updated = True
+    except queue.Empty:
+        pass
+
+    if updated:
+        stop_progress()
+        apply_current_multiplier()  # Cache verwenden, nur ELA-Bild neu berechnen
+    root.after(50, _poll_queue)  # alle 50ms erneut prüfen
+
+def apply_current_multiplier():
+    """
+    Rechnet aus dem zuletzt verfuegbaren Cache-Stand das ELA-Bild neu, unabhaengig
+    davon, ob gerade im Hintergrund ein neuer Quality Wert laeuft.
+    """ 
+
+    global pic_new
+    with _cache_lock:
+        if _cache["encoder_result"] is None:
+            return  # noch kein Ergebnis verfügbar
+        original_rgb = _cache["encoder_result"].original_rgb.astype(np.float64)
+        reproduced_f = _cache["reproduced_rgb"].astype(np.float64)
+        psnr = _cache["psnr"]
+
+        multiplier_val = multiplier_var.get()
+        ela_float = np.abs(original_rgb - reproduced_f) * multiplier_val
+        ela_array = np.clip(ela_float, 0.0, 255.0).astype(np.uint8)
+
+        lbl_psnr_out.config(text=f"{psnr:.4f} dB")
+        pic_new = Image.fromarray(ela_array)
+        refresh_previews()  # Vorschau-Bilder aktualisieren
+
 
 # Datei auswählen, Dateinamen einfügen und Bild in Feld laden
 
@@ -98,7 +177,7 @@ def on_window_resize(event):
     if _resize_job is not None:
         root.after_cancel(_resize_job)  # Vorherigen Job abbrechen
 
-        _resize_job = root.after(_RESIZE_DELAY, _apply_resize)  # Neuen Job planen
+    _resize_job = root.after(_RESIZE_DELAY, _apply_resize)  # Neuen Job planen
 
 def _apply_resize():
     """
@@ -112,6 +191,7 @@ def _apply_resize():
     new_length = _current_slider_length()
     scale_quality.config(length=new_length)
     scale_multiplier.config(length=new_length)
+    progress_canvas.config(width=new_length)
 
     refresh_previews()  # Vorschau-Bilder aktualisieren
 
@@ -119,40 +199,78 @@ def _apply_resize():
 
 # Bild live bearbeiten -> ELA-Vorschau berechnen 
 def update_image(*args):
-    global pic_new
+    """
+    Wird beim Loslassen des Quality-Reglers (und beim Bild öffnen) aufgerufen.
+    """
 
     if dateipfad_global is None:
         return
-    
-    # Ausgang: immer Original 
-    img = pic_old.copy()
-
-    # Werte aus dem Slider holen 
     quality_val = quality_var.get()
-    multiplier_val = multiplier_var.get()
+    with _cache_lock:
+        cached_valid = (_cache["path"] == dateipfad_global and 
+                        _cache["quality"] == quality_val and
+                        _cache["encoder_result"] is not None)
 
-    # ELA-Bild berechnen OHNE speichern nach Aenderung der Sliderwerte
-    ela_array, psnr = generate_ela(
-        dateipfad_global,
-        quality=quality_val,
-        multiplier=multiplier_val,
-        save_intermediates=False
-    )
-
-    #PSNR-Wert aktualisieren
-    lbl_psnr_out.config(text=f"{psnr:.4f} dB")
-
-    # numpy_Array -> PIL-Image,  fuer die die Anzeige und seperates Speichern
-    pic_new = Image.fromarray(ela_array)
-    
-    #Anzeige skalieren
-    refresh_previews()
+    if cached_valid:
+        apply_current_multiplier()  # Cache verwenden, nur ELA-Bild neu berechnen
+    else:
+        request_quality_computation(dateipfad_global, quality_val)  # Neue Berechnung starten
 
 
-# Berechnung des ELA-Bildes beim loslassen des Sliders
+
+# Berechnung des ELA-Bildes beim loslassen des Sliders (Quality-Regler)
 def on_slider_release(event):
     update_image()
 
+def on_multiplier_release(event):
+    with _cache_lock:
+        currently_computing = _computing
+
+    if currently_computing:
+        return  # Wenn gerade eine Berechnung laeuft, nicht neu starten
+
+    apply_current_multiplier()  # nur ELA-Bild neu berechnen, kein neues Encoding/Decoding
+
+# Ladebalken animieren
+def _animate_progress_bar():
+    global _progress_pos, _progress_job
+    progress_canvas.delete("all")
+
+    
+    width = progress_canvas.winfo_width()
+    height = 10
+    # Hintergrund-Leiste
+    progress_canvas.create_rectangle(0, 0, width, height,
+                                     fill="#e0e0e0", outline="")
+
+    # bewegtes Segment
+    seg_width = 40
+    x0 = _progress_pos
+    x1 = x0 + seg_width
+    progress_canvas.create_rectangle(x0, 0, x1, height,
+                                    fill="#4a90d9", outline="")
+
+    _progress_pos += 3
+    if _progress_pos > width:
+        _progress_pos = -seg_width
+
+    _progress_job = root.after(20, _animate_progress_bar)
+
+
+def start_progress():
+    global _progress_pos
+    _progress_pos = -40
+    progress_canvas.grid()
+    _animate_progress_bar()
+
+def stop_progress():
+    global _progress_job
+    if _progress_job is not None:
+        root.after_cancel(_progress_job)
+        _progress_job = None
+    progress_canvas.delete("all")
+
+    
 
 # Bild Speichern 
 def save_pic():
@@ -275,7 +393,7 @@ scale_multiplier = ttk.Scale(para_frame,
                         variable=multiplier_raw, # Regler haengt an der kontinuierlichen Variable, die den genauen Wert speichert
                         command=lambda v: update_label(v, lbl_multiplier_out, multiplier_var))
 scale_multiplier.grid(column=0, row=5)
-scale_multiplier.bind("<ButtonRelease-1>", on_slider_release)  # Event-Handler für Slider loslassen
+scale_multiplier.bind("<ButtonRelease-1>", on_multiplier_release)  # Event-Handler für Slider loslassen
 
 lbl_multiplier_out =tk.Label(para_frame, anchor="center", text="30") # Default bei 30
 lbl_multiplier_out.grid(column=0, row=6)
@@ -286,6 +404,15 @@ lbl_psnr.grid(column=0, row=7)
 
 lbl_psnr_out =tk.Label(para_frame, anchor="center", text="-")
 lbl_psnr_out.grid(column=0, row=8)
+
+# Ladebalken
+progress_canvas =tk.Canvas(para_frame, width=150, height=10,
+                           highlightthickness=0, bg=root.cget("bg"))
+progress_canvas.grid(column=0, row=9, pady=(5, 0))
+
+_progress_bar_id = None
+_progress_pos = 0 
+_progress_job = None
 
 # Checkbox um die Intermediates beim Speichern mit zu exportieren
 save_intermediates_var = tk.BooleanVar(value=False)  # Default: nicht speichern
@@ -307,4 +434,5 @@ root.bind("<Configure>", on_window_resize)
 
 
 # starten Event-Loop
+root.after(50, _poll_queue)  # Queue-Polling starten
 root.mainloop()
