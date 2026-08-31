@@ -81,8 +81,7 @@ def estimate_quality(qtables: dict) -> float:
     # Approximiere Qualitaetswert
     d  = (abs(mean_y - mean_cb) + abs(mean_y - mean_cr)) * 0.49  
     q  = 100.0 - mu + d  
-
-    # approximierter Qualitaetswert liegt in [0,100]
+    
     q = max(0.0, min(100.0, q))                                       
     return q
 
@@ -100,5 +99,4 @@ def save_qtables_to_file(qtables: dict, quality: float, filepath: str) -> None:
             for row in qtables[component]:
                 f.write("  " + "  ".join(f"{v:4d}" for v in row) + "\n")
             f.write("\n")
-
 
