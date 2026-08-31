@@ -59,18 +59,11 @@ def rgb_to_ycbcr(image_rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
     G = img[:, :, 1]
     B = img[:, :, 2]
 
-    # ITU-R BT.601-4 Vorwärtstransformation (Studio Swing / eingeschränkter Bereich)
-    # Y  =  16.0 + 65.481 * R / 255.0 + 128.553 * G / 255.0 +  24.966 * B / 255.0
-    # Cb = 128.0 - 37.797 * R / 255.0 -  74.203 * G / 255.0 + 112.000 * B / 255.0
-    # Cr = 128.0 + 112.000 * R / 255.0 - 93.786 * G / 255.0 -  18.214 * B / 255.0
-
-    # sollte sein
     Y  = 0.299 * R  + 0.587 * G + 0.114 * B
     Cb = 128 - 0.169 * R - 0.331 * G + 0.500 * B
     Cr = 128 + 0.500 * R - 0.419 * G - 0.081 * B
 
     return Y, Cb, Cr
-
 
 # ---------------------------------------------------------------------------
 # ITU-R BT.601-4 Rücktransformation:  YCbCr → RGB
