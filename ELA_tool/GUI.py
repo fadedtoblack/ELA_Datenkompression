@@ -36,6 +36,112 @@ def make_card(parent, **grid_opts):
     card.grid(**grid_opts)
     return card
 
+
+class CustomSlider:
+    """
+    Selbst gezeichneter Schieberegler (Canvas-basiert) mit rundem Handle in
+    den Design-Farben der App. Umgeht den Zielkonflikt von ttk.Scale, bei
+    dem entweder das native runde Handle ODER eine individuelle Einfaerbung
+    moeglich ist, aber nicht beides gleichzeitig.
+
+    Nutzung ist bewusst aehnlich zu ttk.Scale gehalten:
+      - .grid(...)               zum Platzieren
+      - .get() / .set(value)     zum Lesen/Setzen des aktuellen Werts
+      - .config_width(px)        zum Anpassen der Breite (z.B. bei Resize)
+      - on_change(value)         wird bei jeder Wertaenderung waehrend des Ziehens aufgerufen
+      - on_release(value)        wird beim Loslassen der Maustaste aufgerufen
+    """
+    HANDLE_RADIUS = 9
+    TROUGH_THICKNESS = 4
+    CANVAS_HEIGHT = 22
+
+    def __init__(self, parent, from_, to_, initial, width,
+                bg, trough_color, accent_color,
+                on_change=None, on_release=None):
+        self.from_ = from_
+        self.to_ = to_
+        self.value = initial
+        self.bg = bg
+        self.trough_color = trough_color
+        self.accent_color = accent_color
+        self.on_change = on_change
+        self.on_release = on_release
+
+        self.canvas = tk.Canvas(parent, width=width, height=self.CANVAS_HEIGHT,
+                                highlightthickness=0, bg=bg)
+        self.canvas.bind("<Button-1>", self._on_press)
+        self.canvas.bind("<B1-Motion>", self._on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._on_release)
+        self._draw()
+
+    def _canvas_width(self):
+        w = self.canvas.winfo_width()
+        if w <= 1:  # Canvas evtl. noch nicht gerendert -> konfigurierte Breite nutzen
+            w = int(self.canvas["width"])
+        return w
+
+    def _usable_width(self):
+        return max(1, self._canvas_width() - 2 * self.HANDLE_RADIUS)
+
+    def _value_to_x(self, value):
+        ratio = (value - self.from_) / (self.to_ - self.from_)
+        return self.HANDLE_RADIUS + ratio * self._usable_width()
+
+    def _x_to_value(self, x):
+        ratio = (x - self.HANDLE_RADIUS) / self._usable_width()
+        ratio = min(1.0, max(0.0, ratio))
+        return self.from_ + ratio * (self.to_ - self.from_)
+
+    def _draw(self):
+        self.canvas.delete("all")
+        w = self._canvas_width()
+        cy = self.CANVAS_HEIGHT // 2
+        x_handle = self._value_to_x(self.value)
+        t = self.TROUGH_THICKNESS // 2
+
+        # Hintergrund-Leiste (voller Bereich)
+        self.canvas.create_rectangle(self.HANDLE_RADIUS, cy - t,
+                                     w - self.HANDLE_RADIUS, cy + t,
+                                     fill=self.trough_color, outline="")
+        # Gefuellter Bereich links vom Handle (Akzentfarbe)
+        self.canvas.create_rectangle(self.HANDLE_RADIUS, cy - t,
+                                     x_handle, cy + t,
+                                     fill=self.accent_color, outline="")
+        # Rundes Handle
+        r = self.HANDLE_RADIUS
+        self.canvas.create_oval(x_handle - r, cy - r, x_handle + r, cy + r,
+                                fill=self.accent_color, outline=self.bg, width=2)
+
+    def _set_from_event(self, event):
+        self.value = self._x_to_value(event.x)
+        self._draw()
+        if self.on_change:
+            self.on_change(self.value)
+
+    def _on_press(self, event):
+        self._set_from_event(event)
+
+    def _on_drag(self, event):
+        self._set_from_event(event)
+
+    def _on_release(self, event):
+        if self.on_release:
+            self.on_release(self.value)
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = min(self.to_, max(self.from_, value))
+        self._draw()
+
+    def grid(self, **kwargs):
+        self.canvas.grid(**kwargs)
+
+    def config_width(self, width):
+        self.canvas.config(width=width)
+        self._draw()
+
 # CACHE & THREAD-STEUERUNG
 _cache_lock = threading.Lock()
 _cache = {"path": None, "quality": None, "encoder_result": None, "ela_image": None, "psnr": None}
@@ -249,8 +355,8 @@ def _apply_resize():
     _resize_job = None  # Job abgeschlossen
 
     new_length = _current_slider_length()
-    scale_quality.config(length=new_length)
-    scale_multiplier.config(length=new_length)
+    scale_quality.config_width(new_length)
+    scale_multiplier.config_width(new_length)
     progress_canvas.config(width=new_length)
 
     refresh_previews()  # Vorschau-Bilder aktualisieren
@@ -336,9 +442,14 @@ def stop_progress():
 def make_flat_button(parent, text, command, bg, fg, hover_bg, font, padx=14, pady=6):
     """
     Baut einen klickbaren 'Button' aus einem tk.Label statt tk.Button.
+    Grund: tk.Button wird unter Windows (v.a. mit aktiviertem Dark Mode)
+    teilweise mit nativer Chrome gezeichnet, die die eigenen Farben
+    ueberschreibt (weisser/unlesbarer Button). tk.Label bekommt diese
+    native Behandlung nie und zeigt daher zuverlaessig die gewuenschten
+    Farben - inklusive Hover-Effekt beim Ueberfahren mit der Maus.
     """
     btn = tk.Label(parent, text=text, bg=bg, fg=fg, font=font,
-                   padx=padx, pady=pady, cursor="hand2")
+                   padx=padx, pady=pady)
 
     def _on_enter(event):
         btn.config(bg=hover_bg)
@@ -398,13 +509,8 @@ screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 root.maxsize(width=screen_width, height=screen_height)  # Maximale Größe auf Bildschirmgröße setzen
 
-style = ttk.Style()
-style.theme_use("clam")
-style.configure("TScale",
-                background=BG_CARD,
-                troughcolor=TROUGH_COLOR,
-                lightcolor=ACCENT,
-                darkcolor=ACCENT)
+# Hinweis: Kein ttk.Style/theme_use mehr noetig - die Regler sind jetzt
+# selbst gezeichnete CustomSlider (Canvas-basiert), keine ttk.Scale.
 
 # globale Zustandsvariablen 
 pic_old = None
@@ -416,7 +522,10 @@ _progress_job = None
 
 # Einstellung Spaltengröße/Zeilenhoehe
 root.columnconfigure(0, weight=1)
-root.rowconfigure(2, weight=1, minsize=350)  
+root.rowconfigure(2, weight=1, minsize=350)  # Hauptbereich (Originalbild/Parameter/ELA)
+                                              # waechst mit dem Fenster; Mindesthoehe sorgt
+                                              # dafuer, dass die Karten das Fenster auch ohne
+                                              # geladenes Bild sichtbar fuellen
 
 
 # HEADER (Titel)
@@ -434,8 +543,8 @@ lbl_subtitle = tk.Label(title_box, text="Error-Level-Analyse für die digitale B
                         font=FONT_SUBTITLE, bg=BG_APP, fg=TEXT_SECOND)
 lbl_subtitle.pack(anchor="w")
 
-
 # Button und Textfeld Dateiauswahl
+
 file_card = make_card(root, column=0, row=1, sticky="ew", padx=24, pady=(0, 14))
 file_card.columnconfigure(1, weight=1)
 
@@ -461,7 +570,6 @@ main_area.columnconfigure(0, weight=2)
 main_area.columnconfigure(1, weight=1)
 main_area.columnconfigure(2, weight=2)
 main_area.rowconfigure(0, weight=1)
-
 
 # Bildanzeige Originalbild 
 card_original = make_card(main_area, column=0, row=0, sticky="nsew", padx=(0, 10))
@@ -494,45 +602,49 @@ tk.Label(card_params, text="Quality (Q)", font=FONT_NORMAL, bg=BG_CARD,
          fg=TEXT_PRIMARY).grid(column=0, row=1, sticky="w", padx=16)
 
 quality_var = tk.IntVar(value=75) # Default bei 75
-quality_raw = tk.DoubleVar(value=75.0) # Raw-Wert für den Slider, um die Genauigkeit zu erhalten
 
-scale_quality = ttk.Scale(card_params, 
-                        from_=1, to=100, 
-                        orient="horizontal",
-                        length=150, 
-                        variable=quality_raw, # Regler haengt an der kontinuierlichen Variable, die den genauen Wert speichert
-                        command=lambda v: update_label(v, lbl_quality_out, quality_var)
-                        )
+lbl_quality_out = tk.Label(card_params, text="75", font=FONT_NORMAL, bg=BG_CARD,
+                           fg=TEXT_SECOND) # wird von _on_quality_change aktualisiert
+
+def _on_quality_change(value):
+    quality_var.set(int(round(value)))
+    lbl_quality_out.config(text=f"{quality_var.get()}")
+
+def _on_quality_release(value):
+    on_slider_release(None)
+
+scale_quality = CustomSlider(card_params, from_=1, to_=100, initial=75, width=150,
+                             bg=BG_CARD, trough_color=TROUGH_COLOR, accent_color=ACCENT,
+                             on_change=_on_quality_change, on_release=_on_quality_release)
 scale_quality.grid(column=0, row=2, padx=16, pady=(4,2), sticky="ew")
-scale_quality.bind("<ButtonRelease-1>", on_slider_release)  # Event-Handler für Slider loslassen
 
-lbl_quality_out =tk.Label(card_params, text="75", font=FONT_NORMAL, bg=BG_CARD,
-                          fg=TEXT_SECOND) # Default bei 75
 lbl_quality_out.grid(column=0, row=3, sticky="w", padx=16, pady=(0, 16))
-
 
 # Parameter 2: Multiplier (M)
 tk.Label(card_params, text="Multiplier (M)", font=FONT_NORMAL, bg=BG_CARD,
          fg=TEXT_PRIMARY).grid(column=0, row=4, sticky="w", padx=16)
 
 multiplier_var = tk.IntVar(value=30) # Default bei 30
-multiplier_raw = tk.DoubleVar(value=30.0) # Raw-Wert für den Slider, um die Genauigkeit zu erhalten
 
-scale_multiplier = ttk.Scale(card_params,
-                        from_=1, to=100, 
-                        orient="horizontal", 
-                        length=150, 
-                        variable=multiplier_raw, # Regler haengt an der kontinuierlichen Variable, die den genauen Wert speichert
-                        command=lambda v: update_label(v, lbl_multiplier_out, multiplier_var))
+lbl_multiplier_out = tk.Label(card_params, text="30", font=FONT_NORMAL,
+                              bg=BG_CARD, fg=TEXT_SECOND) # wird von _on_multiplier_change aktualisiert
+
+def _on_multiplier_change(value):
+    multiplier_var.set(int(round(value)))
+    lbl_multiplier_out.config(text=f"{multiplier_var.get()}")
+
+def _on_multiplier_release_custom(value):
+    on_multiplier_release(None)
+
+scale_multiplier = CustomSlider(card_params, from_=1, to_=100, initial=30, width=150,
+                                bg=BG_CARD, trough_color=TROUGH_COLOR, accent_color=ACCENT,
+                                on_change=_on_multiplier_change, on_release=_on_multiplier_release_custom)
 scale_multiplier.grid(column=0, row=5, padx=16, pady=(4,2), sticky="ew")
-scale_multiplier.bind("<ButtonRelease-1>", on_multiplier_release)  # Event-Handler für Slider loslassen
 
-lbl_multiplier_out =tk.Label(card_params, text="30", font=FONT_NORMAL, 
-                             bg=BG_CARD, fg=TEXT_SECOND ) # Default bei 30
 lbl_multiplier_out.grid(column=0, row=6, sticky="w", padx=16, pady=(0, 16))
 
-
 # PSNR - Anzeige
+
 psnr_box = tk.Frame(card_params, bg=BG_CARD_ALT, bd=1, relief="solid",
                     highlightbackground=BORDER_COLOR, highlightthickness=1)
 psnr_box.grid(column=0, row=7, sticky="ew", padx=16, pady=(0,8))

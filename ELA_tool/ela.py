@@ -1,16 +1,14 @@
 """
 ela.py
 ------
-Error-Level Analysis (ELA) image generation for the ELA-Tool (SoSe 2026).
-
-Section 2.4 of the assignment spec:
+Erzeugung von Error-Level-Analysis-(ELA-)Bildern für das ELA-Tool.
 
     ELA_pixel = clip( |input_pixel - reproduced_pixel| * M, 0, 255 )
 
-where M is an adjustable contrast multiplier.
+wobei M einen einstellbaren Kontrastmultiplikator darstellt.
 
-The ELA image is saved with the quality value and multiplier encoded in
-the filename.
+Das ELA-Bild wird gespeichert, wobei der Qualitaetswert und der
+Multiplikator im Dateinamen angegeben werden.
 """
 
 import os
@@ -27,27 +25,29 @@ def generate_ela(image_path: str,
                 multiplier: float = 30.0,
                 output_dir: str = "ELA_tool\output",
                 save_intermediates: bool = False,
-                save_output: bool = True) -> np.ndarray: # NEUER PARAMETER damit die GUI nicht automatisch speichert nach jedem Slider-Update
+                save_output: bool = True) -> np.ndarray: # damit die GUI nicht automatisch speichert nach jedem Slider-Update
     """
-    Generiert das ELA-Bild fuer das Input-Bild
+    Erzeugt das ELA-Bild für das Eingabebild.
 
     Ablauf:
-        1. Encoded das Input-Bild mit der angegeben Qualitaet G (quality)
-        2. Decodiert um das reproduzierte Bild zu erhalten
-        3. Berechnet die pixel-weise abolute Differenz, skaliert durch M (multiplier)
-        4. Begrenzen auf [0, 255] und abbspeichern als PNG
+        1. Kodiert das Eingabebild mit der angegebenen Qualitaet Q (quality)
+        2. Dekodiert das Bild, um das rekonstruierte Bild zu erhalten
+        3. Berechnet die pixelweise absolute Differenz, skaliert mit M (multiplier)
+        4. Begrenzt die Werte auf [0, 255] und speichert das Ergebnis als PNG
 
     Parameter
     ----------
-    image_path         : str -> Dateipfad des Input-Bildes (JPEG ist empfohlen)
-    quality            : float -> JPEG-Qualitaets-Wert Q (0, 100]
-    multiplier         : float -> Kontrastverstaerkungsmultiplier M
-    output_dir         : str -> Pfad fuer die Output-Bilder
-    save_intermediates : bool -> speichert auch temporaere Techtdateien des Encoders
+    image_path         : str -> Dateipfad des Eingabebildes (JPEG empfohlen)
+    quality            : float -> JPEG-Qualitaetswert Q (0, 100]
+    multiplier         : float -> Kontrastverstaerkungsmultiplikator M
+    output_dir         : str -> Pfad für die Ausgabebilder
+    save_intermediates : bool -> speichert zusätzlich temporaere Textdateien des Encoders
     save_output        : bool -> speichert das erzeugte ELA-Bild
+
     Ausgabe
     -------
     ela_image : np.ndarray, shape (H, W, 3), dtype uint8
+    psnr      : float, PSNR-Wert in dB zwischen Originalbild und rekonstruiertem Bild
     """
     os.makedirs(output_dir, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -58,7 +58,8 @@ def generate_ela(image_path: str,
 
     def _intermediates_dir(output_dir: str, base_name:str, quality: float) -> str:
         """
-        Baut den Pfad fuer den Unterordner der Zwischenschritte und legt ihn bei Bedarf an, z.B.:
+        Erstellt den Pfad für den Unterordner der Zwischenschritte und legt 
+        diesen bei Bedarf an, z.B.:
             <output_dir>/base_name>_intermediates_q75/
         """
 
@@ -67,11 +68,10 @@ def generate_ela(image_path: str,
         return path
 
  
-    # --------- 1 & 2. Encoden + Decoden -------------------------------------
+    # --------- 1 & 2. Kodierung + Dekodierung -------------------------------------
     """
-    Beginn des Encoding-Prozess anhand der uebergebenen Parameter, das Ergebnis
-    wird in Variable (enc_result) gespeichert und anschliessend ausgegeben.
-
+    Startet den Kodierungsprozess anhand der übergebenen Parameter. Das Ergebnis 
+    wird in der Variable enc_result gespeichert und anschließend ausgegeben.
     """
 
     enc_result = encode(
@@ -103,12 +103,12 @@ def generate_ela(image_path: str,
         ela_name = f"{base_name}_ela_q{quality:.0f}_m{multiplier:.0f}.png"
         ela_path = os.path.join(output_dir, ela_name)
         Image.fromarray(ela_image, mode="RGB").save(ela_path)
-        print(f"\n[ELA] ELA-Bild gespeichert im Ordner: {ela_path}")
-        print(f"[ELA] PSNR (original vs reproduced): {psnr:.4f} dB")
+        print(f"\n[ELA] ELA-Bild gespeichert: {ela_path}")
+        print(f"[ELA] PSNR (Originalbild vs. rekonstruiertes Bild): {psnr:.4f} dB")
 
     else:
         # Hinweis, wenn ELA-Bild nicht gespeichert wird (z.B. bei GUI-Slider-Updates)
-        print(f"\n[ELA] save_output=False -> ELA image not written to disk")
-        print(f"[ELA] PSNR (original vs reproduced): {psnr:.4f} dB")
+        print(f"\n[ELA] save_output=False -> ELA wird nicht auf der Festplatte gespeichert.")
+        print(f"[ELA] PSNR (Originalbild vs. rekonstruiertes Bild): {psnr:.4f} dB")
 
     return ela_image, psnr

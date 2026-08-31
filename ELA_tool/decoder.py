@@ -2,13 +2,14 @@
 decoder.py
 ----------
 Pipeline:
-    1. Receive quantized DCT coefficients from the encoder
-    2. De-quantize
-    3. Inverse 2-D DCT per block (IDCT, level shift +128 applied inside)
-    4. Reassemble 8×8 blocks into full component arrays
-    5. YCbCr → RGB  (ITU-R BT.601-4 inverse)
-    6. Save reproduced image as PNG (Section 2.3.1)
-    7. Compute and display PSNR vs. the original image (Section 2.3.2)
+    1. Quantisierte DCT-Koeffizienten vom Encoder uebernehmen
+    2. Dequantisierung
+    3. Inverse 2-D-DCT pro Block (IDCT, Level-Shift +128 wird innerhalb
+       von apply_idct_to_blocks angewendet)
+    4. 8×8-Bloecke wieder zu vollstaendigen Komponenten-Arrays zusammensetzen
+    5. YCbCr -> RGB  (inverse Transformation gemaess ITU-R BT.601-4)
+    6. Rekonstruiertes Bild als PNG speichern
+    7. PSNR gegenueber dem Originalbild berechnen und anzeigen
 """
 
 import os
@@ -24,24 +25,25 @@ from encoder    import EncoderResult
 def decode(enc_result: EncoderResult,
            output_dir: str = "ELA_tool\output",
            image_name: str = "reproduced",
-           save_output: bool = True) -> tuple[np.ndarray, float]: # NEUER PARAMETER damit die GUI nicht automatisch speichert nach jedem Slider-Update -> Default True wird nur bei benutzen der GUI auf False gesetzt
+           save_output: bool = True) -> tuple[np.ndarray, float]: # damit die GUI nicht automatisch speichert nach jedem Slider-Update -> Default True wird nur bei benutzen der GUI auf False gesetzt
     """
-    Run the full decoder pipeline using the output of the encoder.
+    Fuehrt die vollstaendige Decoder-Pipeline unter Verwendung der Ausgabe des Encoders aus.
 
-    Parameters
+    Parameter
     ----------
-    enc_result  : EncoderResult – output of encoder.encode()
-    output_dir  : str           – directory for output files
-    image_name  : str           – base name for the saved PNG (without extension)
+    enc_result  : EncoderResult – Ausgabe von encoder.encode()
+    output_dir  : str           – Verzeichnis fuer die Ausgabedateien
+    image_name  : str           – Basisname für die gespeicherte PNG-Datei
+                                  (ohne Dateiendung)
 
-    Returns
-    -------
-    reproduced_rgb : np.ndarray, shape (H, W, 3), dtype uint8
-    psnr           : float – PSNR in dB vs. the original image
+    Rueckgabe
+    --------
+    reproduced_rgb : np.ndarray, Form (H, W, 3), Datentyp uint8
+    psnr           : float – PSNR in dB gegenüber dem Originalbild
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    print("[Decoder] Starting decoding pipeline …")
+    print("[Decoder] ekodierungspipeline wird gestartet ...")
 
     qtables        = enc_result.qtables
     q_dct          = enc_result.q_dct
@@ -50,89 +52,78 @@ def decode(enc_result: EncoderResult,
     components_out = {}
 
     for comp_name in ("Y", "Cb", "Cr"):
-        # ------------------------------------------------------------------
-        # 1. De-quantize  (T.81, A.3.6)
-        # ------------------------------------------------------------------
+
+        # Dequantisierung
         dq_blks = dequantize_blocks(q_dct[comp_name], qtables[comp_name])
 
-        # ------------------------------------------------------------------
-        # 2. Inverse DCT  (level shift +128 applied inside apply_idct_to_blocks)
-        # ------------------------------------------------------------------
+        # Inverse DCT  (Level-Shift +128 wird innerhalb von apply_idct_to_blocks angewendet)
         spatial_blks = apply_idct_to_blocks(dq_blks)
 
-        # ------------------------------------------------------------------
-        # 3. Reassemble 8×8 blocks into full component
-        # ------------------------------------------------------------------
+        # 8×8-Bloecke wieder zur vollstaendigen Komponente zusammensetzen
         component = merge_blocks(spatial_blks, orig_shapes[comp_name])
         components_out[comp_name] = component
 
-    # ------------------------------------------------------------------
-    # 4. YCbCr → RGB  (ITU-R BT.601-4 inverse)
-    # ------------------------------------------------------------------
-    print("[Decoder] YCbCr → RGB inverse colour space transformation …")
+    # YCbCr -> RGB  (inverse Transformation gemäß ITU-R BT.601-4)
+    print("[Decoder] Inverse Farbraumtransformation YCbCr -> RGB ...")
     reproduced_rgb = ycbcr_to_rgb(
         components_out["Y"],
         components_out["Cb"],
         components_out["Cr"],
     )
 
-    # ------------------------------------------------------------------
-    # 5. Save reproduced image as PNG  (Section 2.3.1)
-    # ------------------------------------------------------------------
+    # Rekonstruiertes Bild als PNG speichern
     if save_output:
         out_path = os.path.join(output_dir, f"{image_name}.png")
         Image.fromarray(reproduced_rgb, mode="RGB").save(out_path)
-        print(f"[Decoder] Reproduced image saved: {out_path}")
+        print(f"[Decoder] Rekonstruiertes Bild gespeichert: {out_path}")
     else:
-         print("[Decoder] save_output=False -> reproduced image not written to disk")
+         print("[Decoder] save_output=False -> Rekonstruiertes Bild wird nicht auf der Festplatte gespeichert")
 
-    # ------------------------------------------------------------------
-    # 6. Compute PSNR  (Section 2.3.2, Equations 2.6 / 2.7)
-    # ------------------------------------------------------------------
+    # 6. PSNR berechnen
     if enc_result.original_rgb is not None:
         psnr = compute_psnr(enc_result.original_rgb, reproduced_rgb)
         print(f"[Decoder] PSNR: {psnr:.4f} dB")
     else:
         psnr = float("nan")
-        print("[Decoder] Warning: original image not available, PSNR not computed.")
+        print("[Decoder] Warnung: Originalbild nicht verfügbar, PSNR wird nicht berechnet.")
 
-    print("[Decoder] Done.")
+    print("[Decoder] Abgeschlossen.")
     return reproduced_rgb, psnr
 
 
 def compute_psnr(original: np.ndarray, reproduced: np.ndarray,
                  peak: float = 255.0) -> float:
     """
-    Compute the Peak Signal-to-Noise Ratio (PSNR) between two RGB images.
+    Berechnet das Peak Signal-to-Noise Ratio (PSNR) zwischen zwei RGB-Bildern.
 
-    Equations (2.6) and (2.7) from the assignment spec:
+    Gleichungen:
 
         MSE  = (1 / (H*W*3)) * sum( (original - reproduced)^2 )
         PSNR = 10 * log10( peak^2 / MSE )   [dB]
 
-    Parameters
+    Parameter
     ----------
-    original   : np.ndarray, shape (H, W, 3), dtype uint8
-    reproduced : np.ndarray, shape (H, W, 3), dtype uint8
-    peak       : float – maximum pixel value (255 for uint8)
+    original   : np.ndarray, Form (H, W, 3), Datentyp uint8
+    reproduced : np.ndarray, Form (H, W, 3), Datentyp uint8
+    peak       : float - maximaler Pixelwert (255 für uint8)
 
-    Returns
-    -------
-    float – PSNR in dB  (inf if images are identical)
+    Rueckgabe
+    --------
+    float – PSNR in dB (inf, wenn die Bilder identisch sind)
     """
     orig  = original.astype(np.float64)
     repro = reproduced.astype(np.float64)
 
-    # Ensure same shape (crop to smaller if padding was applied)
+    # Gleiche Form sicherstellen (bei Padding auf die kleinere Groeße zuschneiden)
     H = min(orig.shape[0], repro.shape[0])
     W = min(orig.shape[1], repro.shape[1])
     orig  = orig[:H, :W, :]
     repro = repro[:H, :W, :]
 
-    mse = np.mean((orig - repro) ** 2)             # Eq. 2.7
+    mse = np.mean((orig - repro) ** 2)            
 
     if mse == 0.0:
         return float("inf")
 
-    psnr = 10.0 * np.log10(peak ** 2 / mse)        # Eq. 2.6
+    psnr = 10.0 * np.log10(peak ** 2 / mse)  
     return float(psnr)

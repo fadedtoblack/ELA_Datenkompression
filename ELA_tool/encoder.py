@@ -2,17 +2,16 @@
 encoder.py
 ----------
 
-Pipeline (Section 2.2.1 / Figure 1):
-    1. Load input image (PNG or JPEG)
-    2. RGB → YCbCr  (ITU-R BT.601-4)
-    3. Split each component into 8×8 blocks
-    4. Forward 2-D DCT per block (level-shift -128 applied inside dct_blocks)
-    5. Quantize using quality-scaled tables
-    6. (Optional) Save intermediate results to text files
-    7. Compute and display entropy values (12 total, Section 2.2.6)
-    8. Return quantized DCT coefficients to the decoder
-
-No entropy coding or JPEG header generation is performed, as specified.
+Pipeline
+    1. Eingabebild laden (PNG oder JPEG)
+    2. RGB -> YCbCr  (ITU-R BT.601-4)
+    3. Jede Komponente in 8×8 Bloecke aufteilen
+    4. Vorwaerts-2-D-DCT fuer jeden Block 
+       (Level-Shift -128 wird innerhalb von dct_blocks angewendet)
+    5. Quantisierung mit qualitaetsabhaengig skalierten Tabellen
+    6. (Optional) Zwischenergebnisse in Textdateien speichern
+    7. Entropiewerte berechnen und anzeigen (insgesamt 12)
+    8. Quantisierte DCT-Koeffizienten an den Decoder zurueckgeben
 
 
 Bild-Kompression
@@ -44,19 +43,19 @@ class EncoderResult:
     """
 
     def __init__(self):
-        # Quantized DCT coefficients for each component
+        # Quantisierte DCT-Koeffizienten für jede Komponente
         self.q_dct: dict[str, np.ndarray] = {}        # 'Y', 'Cb', 'Cr'
-        # Original block shapes (needed by decoder to reassemble)
+        # Urspruengliche Blockgroessen (werden vom Decoder zum Wiederzusammensetzen benoetigt)
         self.original_shapes: dict[str, tuple] = {}   # 'Y', 'Cb', 'Cr'
-        # Quantization tables used
+        # Verwendete Quantisierungstabellen
         self.qtables: dict[str, np.ndarray] = {}
-        # Original image array (for PSNR / ELA reference)
+        # Urspruengliches Bild-Array (als Referenz für PSNR / ELA)
         self.original_rgb: np.ndarray | None = None
-        # Entropy values (12 total): keys described in print_entropies()
+        # Entropiewerte (insgesamt 12): Schluessel in print_entropies() beschrieben
         self.entropies: dict[str, float] = {}
-        # Quality value used
+        # Verwendeter Qualitaetswert
         self.quality: float = 50.0
-        # Verified (back-estimated) quality
+        # Ueberpruefte (rueckgeschaetzte) Qualitaet
         self.estimated_quality: float = 0.0
 
 
@@ -66,17 +65,17 @@ def encode(image_path: str,
            output_dir: str = "output") -> EncoderResult:
     
     """
-    Run the full encoder pipeline on an image file.
+    Fuehrt die vollstaendige Encoder-Pipeline fuer eine Bilddatei aus.
 
     Parameter
     ----------
-    image_path         : str   – path to PNG or JPEG input image
-    quality            : float – quality value Q in (0, 100]
-    save_intermediates : bool  – if True, write text files and component
-                                 images as described in Section 2.2.2
-    output_dir         : str   – directory for all output files
+    image_path         : str   – Pfad zum PNG oder JPEG Eingabebild
+    quality            : float – Qualitaetswert Q in (0, 100]
+    save_intermediates : bool  – wenn True, werden Textdateien und 
+                                 Komponentenbilder gespeichert
+    output_dir         : str   – Verzeichnis fuer alle Ausgabedateien
 
-    Returns
+    Rueckgabe
     -------
     EncoderResult
     """
@@ -90,31 +89,31 @@ def encode(image_path: str,
     # --------- 1. Bild laden -----------------------------------------
     # load_image aus colorspace.py 
 
-    print(f"[Encoder] Loading image: {image_path}")
+    print(f"[Encoder] Bild wird geladen: {image_path}")
     rgb = load_image(image_path)  
     result.original_rgb = rgb
-    print(f"  Image size: {rgb.shape[1]}×{rgb.shape[0]}  (W×H)")
+    print(f"  Bildgröße: {rgb.shape[1]}×{rgb.shape[0]}  (B×H)")
 
     
     # --------- 2. Quantisierungstabellen berechnen --------------------
-    # aus quality-Wert werden die eigentlichen 8x8-Quantisierungstabellen berechnet 
-    # estimate_quality() rechnet Tabellen zurueck, welche Qualitaet sie 'eigentlich' repraesentieren
+    # aus dem quality-Wert werden die eigentlichen 8x8-Quantisierungstabellen berechnet 
+    # estimate_quality() rechnet Tabellen zurueck, welche Qualitaet sie tatsaechlich repraesentieren
 
     qtables = compute_all_qtables(quality)
     result.qtables = qtables
     result.estimated_quality = estimate_quality(qtables)
-    print(f"  Quality: Q={quality:.1f}%  "
-          f"(back-estimated: {result.estimated_quality:.2f}%)")
+    print(f"  Qualität: Q={quality:.1f}%  "
+          f"(rückgeschätzt: {result.estimated_quality:.2f}%)")
 
     if save_intermediates:
         qt_path = os.path.join(output_dir, f"{base_name}_qtables_q{quality:.0f}.txt")
         save_qtables_to_file(qtables, quality, qt_path)
-        print(f"  Saved quantization tables: {qt_path}")
+        print(f"  Quantisierungstabellen gespeichert: {qt_path}")
 
 
     # --------- 3. Farbraumtransformation RGB -> YCbCr ------------------
 
-    print("[Encoder] RGB → YCbCr colour space transformation …")
+    print("[Encoder] Farbraumtransformation RGB -> YCbCr ...")
     Y, Cb, Cr = rgb_to_ycbcr(rgb)
 
     Y  = np.clip(np.round(Y),  0, 255)
@@ -132,60 +131,60 @@ def encode(image_path: str,
     result.entropies["H_Cr"] = compute_entropy(Cr)
 
     if save_intermediates:
-        # Save Y/Cb/Cr text files (blockwise – we use the raw component
-        # values arranged into 8×8 tiles for the colour-space step)
+        # Y/Cb/Cr-Textdateien speichern (blockweise -> hierfür werden die
+        # Rohwerte der Komponenten in 8×8-Kacheln angeordnet)
         save_component_images(Y, Cb, Cr, base_name, output_dir)
         for comp_name, comp_data in (("y", Y), ("cb", Cb), ("cr", Cr)):
             blks, _ = split_into_blocks(comp_data)
             txt_path = os.path.join(output_dir,
                                     f"{base_name}_{comp_name}.txt")
             save_blocks_to_file(blks, txt_path)
-            print(f"  Saved colour-space blocks: {txt_path}")
+            print(f"  Farbraumblöcke gespeichert: {txt_path}")
 
 
     
     # --------- 4. 8×8 Block-Zerlegung  +  5. DCT ----------------------
 
-    print("[Encoder] Block decomposition and DCT …")
+    print("[Encoder] Blockzerlegung und DCT ...")
     components = {"Y": Y, "Cb": Cb, "Cr": Cr}
     dct_results  = {}
     qdct_results = {}
 
     for comp_name, comp_data in components.items():
-        # Split into blocks (padding handled inside split_into_blocks)
+        # In Bloecke aufteilen (Padding wird innerhalb von split_into_blocks behandelt)
         blocks, orig_shape = split_into_blocks(comp_data)
         result.original_shapes[comp_name] = orig_shape
 
-        # Forward DCT (level shift applied inside apply_dct_to_blocks)
+        # Vorwaerts-DCT (Level-Shift wird innerhalb von apply_dct_to_blocks angewendet)
         dct_blks = apply_dct_to_blocks(blocks)
         dct_results[comp_name] = dct_blks
 
-        # Entropy of DCT coefficients
+        # Entropie der DCT-Koeffizienten
         result.entropies[f"H_{comp_name}_dct"] = compute_entropy(dct_blks)
 
 
         # --------- 6. Quantisierung ---------------------------------------
 
-        q_key = "Y" if comp_name == "Y" else "Cb"  # Cb and Cr share chroma table
+        q_key = "Y" if comp_name == "Y" else "Cb"  # Cb und Cr verwenden dieselbe Chrominanz-Tabelle
         q_blks = quantize_blocks(dct_blks, qtables[comp_name])
         qdct_results[comp_name] = q_blks
 
-        # Entropy of quantized DCT coefficients
+        # Entropie der quantisierten DCT-Koeffizienten
         result.entropies[f"H_{comp_name}_qdct"] = compute_entropy(q_blks)
 
         if save_intermediates:
             comp_lower = comp_name.lower()
-            # DCT text file
+            # DCT-Textdateien
             dct_txt = os.path.join(output_dir,
                                    f"{base_name}_{comp_lower}_dct.txt")
             save_blocks_to_file(dct_blks, dct_txt)
-            print(f"  Saved DCT blocks:  {dct_txt}")
+            print(f"  DCT-Blöcke gespeichert:  {dct_txt}")
 
-            # Quantized DCT text file
+            # Quantisierte DCT-Textdateien
             qdct_txt = os.path.join(output_dir,
                                     f"{base_name}_{comp_lower}_qdct.txt")
             save_blocks_to_file(q_blks, qdct_txt)
-            print(f"  Saved QDCT blocks: {qdct_txt}")
+            print(f"  QDCT-Blöcke gespeichert: {qdct_txt}")
 
     result.q_dct = qdct_results
 
@@ -194,32 +193,32 @@ def encode(image_path: str,
     
     _print_entropies(result.entropies)
 
-    # Optionally save entropy to file
+    # Entropie optional in einer Datei speichern
     if save_intermediates:
         ent_path = os.path.join(output_dir,
                                 f"{base_name}_entropy_q{quality:.0f}.txt")
         _save_entropies(result.entropies, ent_path, quality)
-        print(f"  Saved entropy values: {ent_path}")
+        print(f"  Entropiewert gespeichert: {ent_path}")
 
-    print("[Encoder] Done.")
+    print("[Encoder] Abgeschlossen.")
     return result
 
 
 def _print_entropies(entropies: dict) -> None:
-    print("\n[Encoder] Entropy values (bits per symbol):")
+    print("\n[Encoder] Entropiewerte (Bits pro Symbol):")
     order = [
-        ("H_R",        "R channel"),
-        ("H_G",        "G channel"),
-        ("H_B",        "B channel"),
-        ("H_Y",        "Y component"),
-        ("H_Cb",       "Cb component"),
-        ("H_Cr",       "Cr component"),
-        ("H_Y_dct",    "Y  DCT coefficients"),
-        ("H_Cb_dct",   "Cb DCT coefficients"),
-        ("H_Cr_dct",   "Cr DCT coefficients"),
-        ("H_Y_qdct",   "Y  quantized DCT"),
-        ("H_Cb_qdct",  "Cb quantized DCT"),
-        ("H_Cr_qdct",  "Cr quantized DCT"),
+        ("H_R",        "R-Kanal"),
+        ("H_G",        "G-Kanal"),
+        ("H_B",        "B-Kanal"),
+        ("H_Y",        "Y-Komponente"),
+        ("H_Cb",       "Cb-Komponente"),
+        ("H_Cr",       "Cr-Komponente"),
+        ("H_Y_dct",    "Y-DCT-Koeffizienten"),
+        ("H_Cb_dct",   "Cb-DCT-Koeffizienten"),
+        ("H_Cr_dct",   "Cr-DCT-Koeffizienten"),
+        ("H_Y_qdct",   "Y-quantisierte DCT"),
+        ("H_Cb_qdct",  "Cb-quantisierte DCT"),
+        ("H_Cr_qdct",  "Cr-quantisierte DCT"),
     ]
     for key, label in order:
         val = entropies.get(key, float("nan"))
@@ -228,6 +227,6 @@ def _print_entropies(entropies: dict) -> None:
 
 def _save_entropies(entropies: dict, filepath: str, quality: float) -> None:
     with open(filepath, "w") as f:
-        f.write(f"Entropy values for Q={quality:.1f}%\n\n")
+        f.write(f"Entropiewerte für Q={quality:.1f}%\n\n")
         for key, val in entropies.items():
             f.write(f"{key}: {val:.6f}\n")

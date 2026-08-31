@@ -1,17 +1,17 @@
 """
 main.py
 -------
-Kommandozeilen Interface fuer das ELA-Tool
+Kommandozeilenschnittstelle fuer das ELA-Tool
 
-Usage examples
+Verwendungsbeispiel
 --------------
-# Run the full ELA pipeline on a JPEG image:
+Die vollstaendige ELA-Pipeline fuer ein JPEG-Bild ausfuehren:
     python main.py ela input.jpg --quality 75 --multiplier 30
 
-# Encode + decode only (with intermediate text files saved):
+Nur Kodieren und Dekodieren ausfuehren (mit Speicherung der Zwischendateien):
     python main.py encode input.png --quality 50 --save-intermediates
 
-# Run built-in module self-tests:
+Eingebaute Selbsttests der Module ausfuehren:
     python main.py test
 """
 
@@ -106,31 +106,31 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     # ── encode sub-command ──────────────────────────────────────────────────
-    p_enc = sub.add_parser("encode", help="Encode and decode an image")
-    p_enc.add_argument("image",           help="Path to input image (PNG or JPEG)")
+    p_enc = sub.add_parser("encode", help="Bild kodieren und dekodieren")
+    p_enc.add_argument("image",           help="Pfad zum Eingabebild (PNG oder JPEG)")
     p_enc.add_argument("--quality", "-q", type=float, default=50.0,
-                       help="Quality value Q in (0, 100]  (default: 50)")
+                       help="Qualitätswert Q in (0, 100]  (Standard: 50)")
     p_enc.add_argument("--save-intermediates", "-s", action="store_true",
-                       help="Save intermediate text files and component images")
+                       help="Zwischendateien und Komponentenbilder speichern")
     p_enc.add_argument("--output-dir", "-o", default="output",
-                       help="Output directory  (default: ./output)")
+                       help="Ausgabeordner  (Standard: ./output)")
     p_enc.set_defaults(func=cmd_encode)
 
     # ── ela sub-command ─────────────────────────────────────────────────────
-    p_ela = sub.add_parser("ela", help="Generate an ELA image")
-    p_ela.add_argument("image",             help="Path to input image (JPEG recommended)")
+    p_ela = sub.add_parser("ela", help="ELA-Bild erzeugen")
+    p_ela.add_argument("image",             help="Pfad zum Eingabebild (JPEG empfohlen)")
     p_ela.add_argument("--quality",  "-q",  type=float, default=75.0,
-                       help="Quality value Q for re-encoding  (default: 75)")
+                       help="Qualitätswert Q für die erneute Kodierung  (Standard: 75)")
     p_ela.add_argument("--multiplier", "-m", type=float, default=30.0,
-                       help="Contrast multiplier M  (default: 30)")
+                       help="Kontrastmultiplikator M  (Standard: 30)")
     p_ela.add_argument("--save-intermediates", "-s", action="store_true",
-                       help="Also save encoder intermediate text files")
+                       help="Zusätzlich Zwischendateien der Kodierung speichern")
     p_ela.add_argument("--output-dir", "-o", default="output",
-                       help="Output directory  (default: ./output)")
+                       help="Ausgabeordner  (Standard: ./output)")
     p_ela.set_defaults(func=cmd_ela)
 
     # ── test sub-command ────────────────────────────────────────────────────
-    p_test = sub.add_parser("test", help="Run module self-tests")
+    p_test = sub.add_parser("test", help="Selbsttests der Module ausführen")
     p_test.set_defaults(func=cmd_test)
 
     return parser
