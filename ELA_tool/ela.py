@@ -84,9 +84,7 @@ def generate_ela(image_path: str,
     print(enc_result)
 
     repro_name = f"{base_name}_reproduced_q{quality:.0f}"
-    reproduced_rgb, psnr = decode(enc_result,
-                                   output_dir=output_dir,
-                                   image_name=repro_name)
+    reproduced_rgb, psnr = decode(enc_result, output_dir=output_dir,image_name=repro_name)
 
     # --------- 3. ELA Bild erstellen ------------------------------------------
     #   ELA_pixel = clip( |input - reproduced| * M, 0, 255 )

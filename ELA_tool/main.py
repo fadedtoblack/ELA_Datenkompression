@@ -2,17 +2,6 @@
 main.py
 -------
 Kommandozeilenschnittstelle fuer das ELA-Tool
-
-Verwendungsbeispiel
---------------
-Die vollstaendige ELA-Pipeline fuer ein JPEG-Bild ausfuehren:
-    python main.py ela input.jpg --quality 75 --multiplier 30
-
-Nur Kodieren und Dekodieren ausfuehren (mit Speicherung der Zwischendateien):
-    python main.py encode input.png --quality 50 --save-intermediates
-
-Eingebaute Selbsttests der Module ausfuehren:
-    python main.py test
 """
 
 import argparse
@@ -29,7 +18,7 @@ def cmd_encode(args):
     gegebener Qualitaetsstufe (quality). 
     Dekodiert das Ergebnis direkt wieder und speichert es als 
     'reproduziertes' Bild mit dem Dateinamen wie 'bild_reproduced_q60.png'.
-    --save_intermediates speichert Zwischenschritte (was genau??)
+    --save_intermediates speichert Zwischenschritte
     --output_dir bestimmt  Ausgabeorder (default: ./output)
     """
 
@@ -61,7 +50,6 @@ def cmd_ela(args):
         output_dir=args.output_dir,
         save_intermediates=args.save_intermediates,
     )
-
 
 def cmd_test(_args):
     """

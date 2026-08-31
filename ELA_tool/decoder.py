@@ -114,7 +114,7 @@ def compute_psnr(original: np.ndarray, reproduced: np.ndarray,
     orig  = original.astype(np.float64)
     repro = reproduced.astype(np.float64)
 
-    # Gleiche Form sicherstellen (bei Padding auf die kleinere Groeße zuschneiden)
+    # Gleiche Form sicherstellen (bei Padding auf die kleinere Groesse zuschneiden)
     H = min(orig.shape[0], repro.shape[0])
     W = min(orig.shape[1], repro.shape[1])
     orig  = orig[:H, :W, :]

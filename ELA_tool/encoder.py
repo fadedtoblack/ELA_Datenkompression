@@ -195,8 +195,7 @@ def encode(image_path: str,
 
     # Entropie optional in einer Datei speichern
     if save_intermediates:
-        ent_path = os.path.join(output_dir,
-                                f"{base_name}_entropy_q{quality:.0f}.txt")
+        ent_path = os.path.join(output_dir, f"{base_name}_entropy_q{quality:.0f}.txt")
         _save_entropies(result.entropies, ent_path, quality)
         print(f"  Entropiewert gespeichert: {ent_path}")
 

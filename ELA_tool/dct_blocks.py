@@ -27,7 +27,7 @@ def split_into_blocks(component: np.ndarray) -> tuple[np.ndarray, tuple]:
     # Umformen in (n_h, 8, n_w, 8) und anschließend Transponierung in (n_h, n_w, 8, 8)
     blocks = (component
               .reshape(n_h, 8, n_w, 8)
-              .transpose(0, 2, 1, 3))          # → (n_h, n_w, 8, 8)
+              .transpose(0, 2, 1, 3))          # -> (n_h, n_w, 8, 8)
     return blocks, original_shape
 
 
@@ -39,7 +39,7 @@ def merge_blocks(blocks: np.ndarray, original_shape: tuple) -> np.ndarray:
     n_h, n_w, _, _ = blocks.shape
     # Rücktransponierung und Umformung
     component = (blocks
-                 .transpose(0, 2, 1, 3)        # → (n_h, 8, n_w, 8)
+                 .transpose(0, 2, 1, 3)        # -> (n_h, 8, n_w, 8)
                  .reshape(n_h * 8, n_w * 8))
     H, W = original_shape
     return component[:H, :W]

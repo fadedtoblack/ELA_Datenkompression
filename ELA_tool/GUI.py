@@ -106,17 +106,12 @@ class CustomSlider:
         t = self.TROUGH_THICKNESS // 2
 
         # Hintergrund-Leiste (voller Bereich)
-        self.canvas.create_rectangle(self.HANDLE_RADIUS, cy - t,
-                                     w - self.HANDLE_RADIUS, cy + t,
-                                     fill=self.trough_color, outline="")
+        self.canvas.create_rectangle(self.HANDLE_RADIUS, cy - t, w - self.HANDLE_RADIUS, cy + t, fill=self.trough_color, outline="")
         # Gefuellter Bereich links vom Handle (Akzentfarbe)
-        self.canvas.create_rectangle(self.HANDLE_RADIUS, cy - t,
-                                     x_handle, cy + t,
-                                     fill=self.accent_color, outline="")
+        self.canvas.create_rectangle(self.HANDLE_RADIUS, cy - t, x_handle, cy + t, fill=self.accent_color, outline="")
         # Rundes Handle
         r = self.HANDLE_RADIUS
-        self.canvas.create_oval(x_handle - r, cy - r, x_handle + r, cy + r,
-                                fill=self.accent_color, outline=self.bg, width=2)
+        self.canvas.create_oval(x_handle - r, cy - r, x_handle + r, cy + r, fill=self.accent_color, outline=self.bg, width=2)
 
     def _set_from_event(self, event):
         self.value = self._x_to_value(event.x)
@@ -168,9 +163,7 @@ def request_quality_computation(path, quality):
         _computing = True
     lbl_psnr_out.config(text="Berechnung läuft...")
     start_progress()
-    threading.Thread(target=_background_compute,
-                     args=(path, quality, my_generation),
-                     daemon=True).start()
+    threading.Thread(target=_background_compute, args=(path, quality, my_generation), daemon=True).start()
     
 def _background_compute(path, quality, generation):
     encode_result = encode(path, quality=quality, save_intermediates=False)
@@ -384,7 +377,6 @@ def _apply_resize():
     refresh_previews()  # Vorschau-Bilder aktualisieren
 
 
-
 # Bild live bearbeiten -> ELA-Vorschau berechnen 
 def update_image(*args):
     """
@@ -514,11 +506,6 @@ def save_pic():
         print("ELA_Bild gepseichert im Ordner:", ausgabe_ordner)
     except Exception as e:
         print("Fehler beim Speichern des ELA-Bildes:", e)
-
-
-
-
-
 
 # ------------- ERSTELLEN GUI FENSTER --------------------
 
