@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 import os
+import tempfile
 from PIL import Image, ImageTk
 import threading
 import queue
@@ -11,7 +12,7 @@ from decoder import decode
 
 from ela import generate_ela
 
-# FARBSCHEMA
+# ---------- FARBSCHEMA -----------------------------------
 BG_APP        = "#14161c"   # Hintergrund des Hauptfensters
 BG_CARD       = "#1c1f27"   # Hintergrund der Karten
 BG_CARD_ALT   = "#20242e"   # leicht abgesetzter Kartenhintergrund (z.B. PSNR-Box)
@@ -28,12 +29,17 @@ FONT_NORMAL   = ("Segoe UI", 9)
 FONT_STAT_VAL = ("Segoe UI", 11, "bold")
 FONT_BIG_VAL  = ("Segoe UI", 16, "bold")
 
-def make_card(parent, **grid_opts):
+def make_card(parent, fixed_size=False, **grid_opts):
     """
     Erstellt einen dunklen Hintergrund und Rahmen.
+    Wenn fixed_size=True wird grid_propagate(False) aufgerufen, um die Karte
+auf eine feste Groesse zu zwingen.
     """
-    card = tk.Frame(parent, bg=BG_CARD, bd=1, relief="solid", highlightbackground=BORDER_COLOR, highlightcolor=BORDER_COLOR, highlightthickness=1)
+    card = tk.Frame(parent, bg=BG_CARD, bd=1, relief="solid", highlightbackground=BORDER_COLOR, 
+                    highlightcolor=BORDER_COLOR, highlightthickness=1)
     card.grid(**grid_opts)
+    if fixed_size:
+        card.grid_propagate(False)
     return card
 
 
@@ -142,12 +148,13 @@ class CustomSlider:
         self.canvas.config(width=width)
         self._draw()
 
-# CACHE & THREAD-STEUERUNG
+
+# ------ CACHE & THREAD-STEUERUNG -------------------------------
 _cache_lock = threading.Lock()
 _cache = {"path": None, "quality": None, "encoder_result": None, "ela_image": None, "psnr": None}
-_compute_generation = 0 # wird bei jeder neuen Berechnunganfrage erhöht
+_compute_generation = 0 # wird bei jeder neuen Berechnunganfrage erhoeht
 _computing = False 
-_result_queue = queue.Queue()  # Queue für Ergebnisse der Hintergrundberechnung
+_result_queue = queue.Queue()  # Queue fuer Ergebnisse der Hintergrundberechnung
 
 def request_quality_computation(path, quality):
     """
@@ -196,18 +203,16 @@ def _poll_queue():
     if updated:
         stop_progress()
         apply_current_multiplier()  # Cache verwenden, nur ELA-Bild neu berechnen
-    root.after(50, _poll_queue)  # alle 50ms erneut prüfen
+    root.after(50, _poll_queue)  # alle 50ms erneut pruefen
+
+
+# ------ SONSTIGE DEFINITIONEN -------------------------------
 
 def apply_current_multiplier():
-    """
-    Rechnet aus dem zuletzt verfuegbaren Cache-Stand das ELA-Bild neu, unabhaengig
-    davon, ob gerade im Hintergrund ein neuer Quality Wert laeuft.
-    """ 
-
     global pic_new
     with _cache_lock:
         if _cache["encoder_result"] is None:
-            return  # noch kein Ergebnis verfügbar
+            return  # noch kein Ergebnis verfuegbar
         original_rgb = _cache["encoder_result"].original_rgb.astype(np.float64)
         reproduced_f = _cache["reproduced_rgb"].astype(np.float64)
         psnr = _cache["psnr"]
@@ -224,20 +229,36 @@ def apply_current_multiplier():
     pic_new = Image.fromarray(ela_array)
     refresh_previews()  # Vorschau-Bilder aktualisieren
 
-    # Infozeile unter dem ELA-Bild aktualisieren (Aufloesung, Q, M, PSNR)
+    # Temporaeres Speichern des rekonstruierten Bildes als JPEG
+    temp_dir = tempfile.gettempdir()
+    temp_reproduced_path = os.path.join(temp_dir, "temp_reproduced.jpg")
+
+    # Umwandeln des rekonstruierten Bildes in ein PIL.Image und Speichern als JPEG
+    reproduced_img = Image.fromarray(reproduced_f.astype(np.uint8))
+    reproduced_img.save(temp_reproduced_path, format="JPEG", quality=quality_var.get())
+
+    # Dateigroesse des rekonstruierten Bildes auslesen
+    reproduced_size_bytes = os.path.getsize(temp_reproduced_path)
+    reproduced_size_mb = reproduced_size_bytes / (1024 * 1024)
+    reproduced_size_kb = reproduced_size_bytes / 1024
+
+    # Infozeile aktualisieren (mit Groesse des rekonstruierten Bildes)
     h, w = ela_array.shape[:2]
     lbl_ela_info.config(
         text=f"{w} × {h}px   •   Q: {quality_var.get()}   •   "
-             f"M: {multiplier_val}   •   PSNR: {psnr:.2f} dB"
+             f"M: {multiplier_val}   •   PSNR: {psnr:.2f} dB   •   "
+             f"Rekonstruiert: {reproduced_size_mb:.2f} MB ({reproduced_size_kb:.1f} KB)"
     )
 
+    # Temporaere Datei loeschen
+    os.remove(temp_reproduced_path)
 
-# Datei auswählen, Dateinamen einfügen und Bild in Feld laden
 
+# Datei auswaehlen, Dateinamen einfuegen und Bild in Feld laden
 def datei_auswaehlen():
     global pic_old, pic_new, dateipfad_global
 
-    # Datei-Dialog öffnen 
+    # Datei-Dialog oeffnen 
     dateipfad = filedialog.askopenfilename(
         title="Bild auswählen", 
         filetypes=[
@@ -246,11 +267,11 @@ def datei_auswaehlen():
         ]
     )
 
-    # wenn Datei ausgewählt
+    # wenn Datei ausgewaehlt
     if dateipfad:
         dateiname = os.path.basename(dateipfad)
         entry_var.set(dateiname)
-        dateipfad_global = dateipfad  # Pfad merken, wird bei jedem Slider-Update erneut an generate_ela() übergeben
+        dateipfad_global = dateipfad  # Pfad merken, wird bei jedem Slider-Update erneut an generate_ela() uebergeben
 
         #Bild laden
         pic_old = Image.open(dateipfad)
@@ -267,7 +288,8 @@ def datei_auswaehlen():
             w, h = pic_old.size
             size_bytes = os.path.getsize(dateipfad)
             size_mb = size_bytes / (1024 * 1024)
-            lbl_orig_info.config(text=f"{w} × {h}px   •   {size_mb:.1f} MB")
+            size_kb = size_bytes / 1024
+            lbl_orig_info.config(text=f"{w} × {h}px   •   {size_mb:.1f} MB ({size_kb:.1f} KB)")
         except Exception:
             lbl_orig_info.config(text="")
 
@@ -331,7 +353,7 @@ def refresh_previews():
         lbl_pic_new.image = tk_img_new
 
 _resize_job = None  # Variable, um den geplanten Job zu speichern
-_RESIZE_DELAY = 150  # Verzögerung in Millisekunden
+_RESIZE_DELAY = 150  # Verzoegerung in Millisekunden
 
 def on_window_resize(event):
     """
@@ -348,7 +370,7 @@ def on_window_resize(event):
 def _apply_resize():
     """
     Fuehrt die eigentliche Anpassung der Vorschau-Bilder und Reglerlaenge durch,
-    nachdem die Verzögerung abgelaufen ist.
+    nachdem die Verzoegerung abgelaufen ist.
     """
 
     global _resize_job
@@ -366,7 +388,7 @@ def _apply_resize():
 # Bild live bearbeiten -> ELA-Vorschau berechnen 
 def update_image(*args):
     """
-    Wird beim Loslassen des Quality-Reglers (und beim Bild öffnen) aufgerufen.
+    Wird beim Loslassen des Quality-Reglers (und beim Bild oeffnen) aufgerufen.
     """
 
     if dateipfad_global is None:
@@ -495,7 +517,10 @@ def save_pic():
 
 
 
-# Erstellen GUI Fenster 
+
+
+
+# ------------- ERSTELLEN GUI FENSTER --------------------
 
 PREVIEW_WIDTH = 350
 
@@ -507,10 +532,7 @@ root.configure(bg=BG_APP)
 
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
-root.maxsize(width=screen_width, height=screen_height)  # Maximale Größe auf Bildschirmgröße setzen
-
-# Hinweis: Kein ttk.Style/theme_use mehr noetig - die Regler sind jetzt
-# selbst gezeichnete CustomSlider (Canvas-basiert), keine ttk.Scale.
+root.maxsize(width=screen_width, height=screen_height)  # Maximale Groesse auf Bildschirmgroesse setzen
 
 # globale Zustandsvariablen 
 pic_old = None
@@ -520,7 +542,7 @@ _progress_bar_id = None
 _progress_pos = 0
 _progress_job = None
 
-# Einstellung Spaltengröße/Zeilenhoehe
+# Einstellung Spaltengroesse/Zeilenhoehe
 root.columnconfigure(0, weight=1)
 root.rowconfigure(2, weight=1, minsize=350)  # Hauptbereich (Originalbild/Parameter/ELA)
                                               # waechst mit dem Fenster; Mindesthoehe sorgt
@@ -543,8 +565,8 @@ lbl_subtitle = tk.Label(title_box, text="Error-Level-Analyse für die digitale B
                         font=FONT_SUBTITLE, bg=BG_APP, fg=TEXT_SECOND)
 lbl_subtitle.pack(anchor="w")
 
-# Button und Textfeld Dateiauswahl
 
+# Button und Textfeld Dateiauswahl
 file_card = make_card(root, column=0, row=1, sticky="ew", padx=24, pady=(0, 14))
 file_card.columnconfigure(1, weight=1)
 
@@ -566,13 +588,13 @@ file_card.columnconfigure(2, weight=0)
 
 main_area =tk.Frame(root, bg=BG_APP)
 main_area.grid(column=0, row=2, sticky="nsew", padx=24, pady=(0, 14))
-main_area.columnconfigure(0, weight=2)
-main_area.columnconfigure(1, weight=1)
-main_area.columnconfigure(2, weight=2)
+main_area.columnconfigure(0, weight=40)
+main_area.columnconfigure(1, weight=20)
+main_area.columnconfigure(2, weight=40)
 main_area.rowconfigure(0, weight=1)
 
 # Bildanzeige Originalbild 
-card_original = make_card(main_area, column=0, row=0, sticky="nsew", padx=(0, 10))
+card_original = make_card(main_area, fixed_size=True, column=0, row=0, sticky="nsew", padx=(0, 10))
 card_original.columnconfigure(0, weight=1)
 card_original.columnconfigure(1, weight=1)
 card_original.rowconfigure(1, weight=1)
@@ -589,8 +611,8 @@ lbl_orig_info = tk.Label(card_original, text="", font=FONT_NORMAL, bg=BG_CARD,
 lbl_orig_info.grid(column=0, row=2, sticky="w", padx=16, pady=(0, 14))
 
 
-#Frame für Regler und Felder Mitte 
-card_params = make_card(main_area, column=1, row=0, sticky="nsew", padx=10)
+#Frame fuer Regler und Felder Mitte 
+card_params = make_card(main_area, fixed_size=True, column=1, row=0, sticky="nsew", padx=10)
 card_params.columnconfigure(0, weight=1)
 
 tk.Label(card_params, text="Parameter", font=FONT_HEADING, bg=BG_CARD, 
@@ -667,7 +689,7 @@ progress_canvas.grid(column=0, row=8, sticky="ew", padx=16, pady=(5, 0))
 
 
 # Bildanzeige neues Bild 
-card_ela = make_card(main_area, column=2, row=0, sticky="nsew", padx=(10, 0))
+card_ela = make_card(main_area, fixed_size=True, column=2, row=0, sticky="nsew", padx=(10, 0))
 card_ela.columnconfigure(0, weight=1)
 card_ela.rowconfigure(1, weight=1)
 
@@ -702,7 +724,7 @@ btn_save = make_flat_button(footer, "ELA-Bild speichern", save_pic,
                             font=FONT_HEADING, padx=18, pady=8)
 btn_save.grid(column=1, row=0, sticky="e", padx=16, pady=14)
 
-# Groessenänderung des Fensters abfangen, um die Vorschau-Bilder und Slider-Längen anzupassen
+# Groessenaenderung des Fensters abfangen, um die Vorschau-Bilder und Slider-Laengen anzupassen
 root.bind("<Configure>", on_window_resize)
 
 
