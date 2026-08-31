@@ -51,35 +51,6 @@ def cmd_ela(args):
         save_intermediates=args.save_intermediates,
     )
 
-def cmd_test(_args):
-    """
-    Fuehrt Selbsttest fuer die einzelnen Module (quantization, colorspace, dct_blocks)
-    durch. 
-    Jedes Modul wird als eigene Python_Subprozess ausgefuehrt (subprocess.run).
-    Gibt eine Statusmeldung aus je nach Exit-Code ()
-    """
-    import subprocess, sys
-
-    modules = [
-        "quantization",
-        "colorspace",
-        "dct_blocks",
-    ]
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    for mod in modules:
-        print(f"\n{'─'*50}")
-        print(f"Running self-test: {mod}.py")
-        print(f"{'─'*50}")
-        result = subprocess.run(
-            [sys.executable, os.path.join(script_dir, f"{mod}.py")],
-            capture_output=False,
-        )
-        if result.returncode != 0:
-            print(f"  ✗ {mod} self-test FAILED (exit code {result.returncode})")
-        else:
-            print(f"  ✓ {mod} self-test passed")
-
-
 def build_parser() -> argparse.ArgumentParser:
 
     """
@@ -116,10 +87,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_ela.add_argument("--output-dir", "-o", default="output",
                        help="Ausgabeordner  (Standard: ./output)")
     p_ela.set_defaults(func=cmd_ela)
-
-    # ── test sub-command ────────────────────────────────────────────────────
-    p_test = sub.add_parser("test", help="Selbsttests der Module ausführen")
-    p_test.set_defaults(func=cmd_test)
 
     return parser
 
