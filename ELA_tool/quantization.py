@@ -81,7 +81,8 @@ def estimate_quality(qtables: dict) -> float:
     # Approximiere Qualitaetswert
     d  = (abs(mean_y - mean_cb) + abs(mean_y - mean_cr)) * 0.49  
     q  = 100.0 - mu + d  
-    
+
+    # approximierter Qualitaetswert liegt in [0,100]
     q = max(0.0, min(100.0, q))                                       
     return q
 
@@ -101,33 +102,3 @@ def save_qtables_to_file(qtables: dict, quality: float, filepath: str) -> None:
             f.write("\n")
 
 
-
-# schneller Selbsttest, der die Referenztabellen mit den berechneten Tabellen fuer Q=50 vergleicht
-# TODO: vor Abgbabe entfernen
-if __name__ == "__main__":
-    print("=== Quantization module self-test ===\n")
-
-    # At Q=50 the computed tables should equal the reference tables exactly
-    tables_50 = compute_all_qtables(50)
-    luma_match   = np.array_equal(tables_50["Y"],  LUMA_REF.astype(np.int32))
-    chroma_match = np.array_equal(tables_50["Cb"], CHROMA_REF.astype(np.int32))
-    print(f"Q=50  →  Luma Tabelle passt zur Referenz:   {luma_match}")
-    print(f"Q=50  →  Chroma Tabelle passt zur Referenz: {chroma_match}")
-
-    # Reverse quality estimate for the reference tables should be ~51%
-    ref_tables = {"Y": LUMA_REF.astype(np.int32),
-                  "Cb": CHROMA_REF.astype(np.int32),
-                  "Cr": CHROMA_REF.astype(np.int32)}
-    est = estimate_quality(ref_tables)
-    print(f"\nEstimated quality from reference tables: {est:.2f}%  (expected ≈ 51%)")
-
-    # Show tables for a few quality levels
-    for q in (10, 50, 75, 95):
-        tables = compute_all_qtables(q)
-        est_q  = estimate_quality(tables)
-        print(f"\nQ={q:3d}%  →  Y[0,0]={tables['Y'][0,0]:4d}  "
-              f"Cb[0,0]={tables['Cb'][0,0]:4d}  "
-              f"estimated Q={est_q:.1f}%")
-        print("  Y table:")
-        for row in tables["Y"]:
-            print("   ", " ".join(f"{v:4d}" for v in row))
